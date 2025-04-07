@@ -1,0 +1,10 @@
+[package]
+name = "design-patterns-project-basket-service"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "basket_service"
+path = "src/main.rs"
+
+[dependencies]

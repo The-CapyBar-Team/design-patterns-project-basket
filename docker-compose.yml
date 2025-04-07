@@ -1,0 +1,7 @@
+services:
+  basket_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: basket_service
+    restart: always
