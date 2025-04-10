@@ -3,5 +3,4 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: basket_service
     restart: always
