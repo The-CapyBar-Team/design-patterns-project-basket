@@ -8,3 +8,6 @@ name = "basket_service"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = "1.0.97"
+redis = { version = "0.29.5", features = ["tokio-comp"] }
+tokio = { version = "1.44.2", features = ["full"] }
