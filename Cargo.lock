@@ -87,7 +87,7 @@ name = "design-patterns-project-basket-service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "redis",
+ "queue_storage",
  "tokio",
 ]
 
@@ -427,6 +427,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a31971752e70b8b2686d7e46ec17fb38dad4051d94024c88df49b667caea9c84"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "queue_storage"
+version = "0.1.0"
+dependencies = [
+ "redis",
 ]
 
 [[package]]

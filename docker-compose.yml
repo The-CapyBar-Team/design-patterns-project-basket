@@ -9,6 +9,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      - REDIS_HOSTNAME=redis
     restart: always
     networks:
       - basket_network

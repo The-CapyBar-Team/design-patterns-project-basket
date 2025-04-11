@@ -1,13 +1,3 @@
-[package]
-name = "design-patterns-project-basket-service"
-version = "0.1.0"
-edition = "2021"
-
-[[bin]]
-name = "basket_service"
-path = "src/main.rs"
-
-[dependencies]
-anyhow = "1.0.97"
-redis = { version = "0.29.5", features = ["tokio-comp"] }
-tokio = { version = "1.44.2", features = ["full"] }
+[workspace]
+resolver = "3"
+members = ["root", "queue_storage"]
