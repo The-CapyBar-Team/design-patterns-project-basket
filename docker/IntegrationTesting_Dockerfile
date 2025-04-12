@@ -1,0 +1,9 @@
+FROM rust:latest AS builder
+
+WORKDIR /usr/src/app
+
+COPY ../ .
+
+RUN cargo test -p tests --release --no-run
+
+CMD ["cargo", "test", "--package", "tests", "--release", "--no-fail-fast"]

@@ -1,13 +1,8 @@
 [package]
-name = "design-patterns-project-basket-service"
+name = "tests"
 version = "0.1.0"
-edition = "2021"
-
-[[bin]]
-name = "basket_service"
-path = "src/main.rs"
+edition = "2024"
 
 [dependencies]
 queue_storage = { path = "../queue_storage" }
 tokio = { version = "1.44.2", features = ["full"] }
-anyhow = "1.0.97"

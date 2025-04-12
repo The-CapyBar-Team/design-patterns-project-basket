@@ -1,4 +1,6 @@
+/docker
 /target
+Makefile
 Dockerfile
 README.md
 .gitignore
