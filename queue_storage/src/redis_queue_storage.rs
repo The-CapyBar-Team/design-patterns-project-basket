@@ -1,6 +1,7 @@
 use crate::traits::{Error, QueueStorage, UserId};
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, Client, RedisError};
+use std::num::NonZero;
 
 pub struct RedisQueueStorage {
     connection: MultiplexedConnection,
@@ -55,8 +56,9 @@ impl QueueStorage for RedisQueueStorage {
             });
         }
 
-        let _: () = self.connection
-            .rpush(queue_id, user_id)
+        let _: () = self
+            .connection
+            .rpush(queue_id_to_queue_list_id(queue_id), user_id)
             .await
             .map_err(redis_error_to_native)?;
 
@@ -65,10 +67,19 @@ impl QueueStorage for RedisQueueStorage {
 
     #[inline(always)]
     async fn pop_user_id(&mut self, queue_id: &str) -> Result<(), Error> {
-        self.connection
-            .rpop(queue_id, None)
+        let popped_user_id: Option<[String; 1]> = self
+            .connection
+            .rpop(queue_id_to_queue_list_id(queue_id), NonZero::new(1))
             .await
-            .map_err(redis_error_to_native)
+            .map_err(redis_error_to_native)?;
+
+        if popped_user_id.is_none() {
+            Err(Error {
+                message: format!("Queue '{}' is empty. Nothing to pop.", queue_id),
+            })
+        } else {
+            Ok(())
+        }
     }
 
     #[inline(always)]

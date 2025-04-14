@@ -6,8 +6,8 @@ COPY ../ .
 
 RUN cargo test -p tests --release --no-run
 
-CMD if [ -z "$TEST_NAME" ]; then                                    \
-        cargo test --package tests --release --no-fail-fast;        \
-    else                                                            \
-        cargo test --package tests --release -- --test $TEST_NAME;  \
+CMD if [ -z "$TEST_NAME" ]; then                                                \
+        cargo test --package tests --release --no-fail-fast -- --nocapture;     \
+    else                                                                        \
+        cargo test --package tests --release -- --test $TEST_NAME --nocapture;  \
     fi

@@ -18,7 +18,8 @@ pub trait QueueStorage {
 
     fn pop_user_id(&mut self, queue_id: &str) -> impl Future<Output = Result<(), Error>> + Send;
 
-    fn queue_length(&mut self, queue_id: &str) -> impl Future<Output = Result<usize, Error>> + Send;
+    fn queue_length(&mut self, queue_id: &str)
+    -> impl Future<Output = Result<usize, Error>> + Send;
 }
 
 #[derive(Debug)]
