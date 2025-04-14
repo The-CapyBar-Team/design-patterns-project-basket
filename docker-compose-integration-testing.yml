@@ -11,6 +11,7 @@ services:
       dockerfile: docker/IntegrationTesting_Dockerfile
     environment:
       - REDIS_HOSTNAME=redis
+      - TEST_NAME=${TEST_NAME}
     networks:
       - basket_network
     depends_on:

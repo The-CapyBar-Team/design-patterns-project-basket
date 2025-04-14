@@ -1,11 +1,12 @@
-build-run:
-	docker compose up --build
+DC = docker compose
+FLAGS ?=
 
 run:
-	docker compose up
+	$(DC) up $(FLAGS)
 
 stop:
-	docker compose down -v
+	$(DC) down $(FLAGS)
 
 test:
-	docker compose -f docker-compose-integration-testing.yml up --build --abort-on-container-exit --exit-code-from basket_service_integration_testing
+	$(eval TEST_NAME_SPECIFIED := $(if $(TEST),TEST_NAME=$(TEST),))
+	$(TEST_NAME_SPECIFIED) $(DC) -f docker-compose-integration-testing.yml up $(FLAGS) --abort-on-container-exit --exit-code-from basket_service_integration_testing
