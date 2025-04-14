@@ -5,13 +5,13 @@ services:
       - "6379:6379"
     networks:
       - basket_network
-  basket_service:
+  basket_service_integration_testing:
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/IntegrationTesting_Dockerfile
     environment:
       - REDIS_HOSTNAME=redis
-    restart: always
+      - TEST_NAME=${TEST_NAME}
     networks:
       - basket_network
     depends_on:
