@@ -1,4 +1,4 @@
 [workspace]
 resolver = "3"
-members = ["root", "queue_storage", "tests"]
-default-members = ["root", "queue_storage"]
+members = ["basket_service", "basket_balancer", "tests", "basket_communication"]
+default-members = ["basket_service", "basket_balancer"]

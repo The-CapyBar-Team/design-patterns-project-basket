@@ -1,21 +1,22 @@
 services:
-  redis:
-    image: redis:6.2.0-alpine
-    ports:
-      - "6379:6379"
+  basket_balancer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    restart: always
     networks:
       - basket_network
+    command: ["cargo", "run", "--release", "--bin", "basket_balancer"]
   basket_service:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    environment:
-      - REDIS_HOSTNAME=redis
     restart: always
     networks:
       - basket_network
+    command: ["cargo", "run", "--release", "--bin", "basket_service"]
     depends_on:
-      - redis
+      - basket_balancer
 
 networks:
   basket_network:

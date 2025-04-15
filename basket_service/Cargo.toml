@@ -8,6 +8,10 @@ name = "basket_service"
 path = "src/main.rs"
 
 [dependencies]
-queue_storage = { path = "../queue_storage" }
-tokio = { version = "1.44.2", features = ["full"] }
+basket_communication = { path = "../basket_communication" }
 anyhow = "1.0.97"
+tokio = { version = "1.44.2", features = ["full"] }
+tonic = "0.13.0"
+
+[build-dependencies]
+tonic-build = "0.13.0"

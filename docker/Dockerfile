@@ -4,6 +4,8 @@ WORKDIR /usr/src/app
 
 COPY ../ .
 
-RUN cargo build --release --bin basket_service
+RUN apt update                                                          && \
+    apt install -y protobuf-compiler                                    && \
+    cargo build --release --bin basket_balancer --bin basket_service
 
 CMD ["cargo", "run", "--release", "--bin", "basket_service"]
