@@ -1,64 +1,75 @@
-use std::time::Duration;
-use tonic::transport::Server;
-use basket_communication::basket_balancer_notifier::NotificationData;
-use basket_communication::basket_balancer_notifier::balancer_notifier_client::BalancerNotifierClient;
-use basket_communication::basket_service_processor::basket_processor_server::BasketProcessorServer;
-use grpc_server::GrpcBasketServiceServer;
+use basket_communication::add_to_queue_request;
+use prost::Message;
+use lapin::{options::*, types::FieldTable, BasicProperties, Connection, Channel, message::Delivery};
+use futures::stream::StreamExt;
 
-mod grpc_server;
+async fn handle_message(channel: &Channel, delivery: Delivery) -> anyhow::Result<()> {
+    let message = add_to_queue_request::Message::decode(&delivery.data[..])?;
 
-async fn do_client() {
-    let url = "http://basket_balancer:50051";
-    let mut client = loop {
-        match BalancerNotifierClient::connect(url).await {
-            Ok(client) => {
-                break client
-            },
-            Err(error) => {
-                println!("# client | Connectivity error: {}", error);
-                std::thread::sleep(Duration::from_secs(2));
-            }
-        }
+    println!("Received message #{}: {}", message.id, message.content);
+
+    let response = add_to_queue_request::Message {
+        content: format!("Echo: {}", message.content),
+        id: message.id,
     };
 
-    loop {
-        let args = NotificationData {
-            name: "DATA_FROM_BASKET_SERVICE".to_owned(),
-        };
-        let request = tonic::Request::new(args);
+    let payload = response.encode_to_vec();
 
-        match client.out_of_stock_notify(request).await {
-            Ok(responce) => println!("# client | Received Responce: {}", responce.get_ref().message),
-            Err(error) => println!("# client | Error: {}", error),
-        };
+    channel.basic_publish(
+        "",
+        "reply_to_queue",
+        BasicPublishOptions::default(),
+        &payload,
+        BasicProperties::default(),
+    )
+    .await?
+    .await?;
 
-        std::thread::sleep(Duration::from_secs(2));
-    }
+    channel.basic_ack(delivery.delivery_tag, BasicAckOptions::default()).await?;
+
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let client_handle = tokio::spawn(async {
-        do_client().await
-    });
+    let connection = Connection::connect("amqp://admin:admin@rabbit:5672/%2f", lapin::ConnectionProperties::default()).await?;
+    // let connection = Connection::connect("amqp://localhost", lapin::ConnectionProperties::default()).await?;
+    // println!("Trying to create a channel");
+    let channel = connection.create_channel().await?;
+    // println!("Channel created");
 
-    let server_handle = tokio::spawn(async {
-        let addr = "[::]:50052".parse().unwrap();
-        let basket_service = GrpcBasketServiceServer::default();
+    let queue_name = "request_queue";
+    // println!("Trying to queue_declare");
+    let _queue = channel.queue_declare(queue_name, QueueDeclareOptions::default(), FieldTable::default()).await?;
+    // println!("queue_declare done. Trying to declare reply_to_queue");
+    let _reply_to_queue = channel.queue_declare("reply_to_queue", QueueDeclareOptions::default(), FieldTable::default()).await?;
+    // println!("reply_to_queue declared.");
 
-        while let Err(error) = Server::builder()
-            .add_service(BasketProcessorServer::new(basket_service.clone()))
-            .serve(addr)
-            .await
-        {
-            println!("# server | {}", error);
+    // loop {
+    //     println!("Dodododo");
+    //     std::thread::sleep(std::time::Duration::from_secs(3));
+    // }
+
+    let mut consumer = channel.basic_consume(
+        queue_name,
+        "server_consumer",
+        BasicConsumeOptions::default(),
+        FieldTable::default(),
+    ).await?;
+
+    println!("Server is running, waiting for messages...");
+
+    while let Some(delivery) = consumer.next().await {
+        // println!("Here's the delivery!");
+        match delivery {
+            Ok(delivery) => {
+                if let Err(e) = handle_message(&channel, delivery).await {
+                    eprintln!("Failed to handle message: {}", e);
+                }
+            }
+            Err(e) => eprintln!("Error while consuming message: {}", e),
         }
-
-        println!("BasketBalancer listening on {}", addr);
-    });
-
-    client_handle.await?;
-    server_handle.await?;
+    }
 
     Ok(())
 }

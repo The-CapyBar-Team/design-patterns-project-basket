@@ -3,9 +3,12 @@ name = "basket_communication"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "basket_request_generator"
+path = "src/main.rs"
+
 [dependencies]
 prost = "0.13.5"
-tonic = "0.13.0"
 
 [build-dependencies]
-tonic-build = "0.13.0"
+prost-build = "0.13.5"

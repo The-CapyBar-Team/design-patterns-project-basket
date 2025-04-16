@@ -1,22 +1,52 @@
 services:
-  basket_balancer:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    restart: always
+  rabbit:
+    image: rabbitmq:4
+    #container_name: rabbitmq
+    volumes:
+        - ./etc/rabbitmq/conf:/etc/rabbitmq/
+        - ./etc/rabbitmq/data/:/var/lib/rabbitmq/
+        - ./etc/rabbitmq/logs/:/var/log/rabbitmq/
+    environment:
+        RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-secret_cookie}
+        RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-admin}
+        RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-admin}
+    ports:
+        - 5672:5672    #amqp
+        - 15672:15672  #http
+        - 15692:15692  #prometheus
+    healthcheck:
+      test: [ "CMD", "rabbitmqctl", "status"]
+      interval: 5s
+      timeout: 20s
+      retries: 5
     networks:
       - basket_network
-    command: ["cargo", "run", "--release", "--bin", "basket_balancer"]
   basket_service:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      args:
+        - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
     restart: always
     networks:
       - basket_network
     command: ["cargo", "run", "--release", "--bin", "basket_service"]
     depends_on:
-      - basket_balancer
+      rabbit:
+        condition: service_healthy
+  basket_request_generator:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
+    restart: always
+    networks:
+      - basket_network
+    command: ["cargo", "run", "--release", "--bin", "basket_request_generator"]
+    depends_on:
+      rabbit:
+        condition: service_healthy
 
 networks:
   basket_network:
