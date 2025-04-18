@@ -8,6 +8,9 @@ name = "basket_service"
 path = "src/main.rs"
 
 [dependencies]
-queue_storage = { path = "../queue_storage" }
-tokio = { version = "1.44.2", features = ["full"] }
+basket_communication = { path = "../basket_communication" }
 anyhow = "1.0.97"
+futures = "0.3.31"
+tokio = { version = "1.44.2", features = ["full"] }
+lapin = "2.5.1"
+prost = "0.13.5"

@@ -4,6 +4,11 @@ WORKDIR /usr/src/app
 
 COPY ../ .
 
-RUN cargo build --release --bin basket_service
+ARG BASKET_PROTO_DIRECTORY_PATH
+ARG BASKET_BIN
 
-CMD ["cargo", "run", "--release", "--bin", "basket_service"]
+RUN apt update                                                          && \
+    apt install -y protobuf-compiler                                    && \
+    cargo build --release --bin basket_request_generator --bin basket_service
+
+CMD sh -c "cargo run --release --bin $BASKET_BIN"

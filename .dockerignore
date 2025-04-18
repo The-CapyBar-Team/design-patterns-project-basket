@@ -1,5 +1,7 @@
 /docker
 /target
+/persistent_data
+docker-compose*
 Makefile
 Dockerfile
 README.md
