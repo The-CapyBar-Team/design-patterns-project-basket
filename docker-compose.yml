@@ -25,10 +25,12 @@ services:
       dockerfile: docker/Dockerfile
       args:
         - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
+        - BASKET_BIN=basket_service
     restart: always
     networks:
       - basket_network
-    command: ["cargo", "run", "--release", "--bin", "basket_service"]
+    # command: >
+    #   sh -c "cargo run --release --bin basket_service"
     depends_on:
       rabbit:
         condition: service_healthy
@@ -38,10 +40,12 @@ services:
       dockerfile: docker/Dockerfile
       args:
         - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
+        - BASKET_BIN=basket_request_generator
     restart: always
     networks:
       - basket_network
-    command: ["cargo", "run", "--release", "--bin", "basket_request_generator"]
+    # command: >
+    #   sh -c "cargo run --release --bin basket_request_generator"
     depends_on:
       basket_service:
         condition: service_started
