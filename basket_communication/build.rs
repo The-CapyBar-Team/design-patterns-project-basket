@@ -2,7 +2,7 @@ use std::env;
 
 fn main() {
     let proto_dir_path = env::var("BASKET_PROTO_DIRECTORY_PATH").unwrap();
-    let proto_files = ["add_to_queue_request.proto"];
+    let proto_files = ["add_to_queue_request.proto", "hold_product_request.proto"];
     let proto_paths = proto_files.map(|proto_file| format!("{}/{}", proto_dir_path, proto_file));
 
     for proto_path in proto_paths.iter() {

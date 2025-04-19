@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package hold_product_request;
+
+message Message {
+  uint32 user_id = 1;
+  uint32 product_id = 2;
+}
+
+enum ProductStatus {
+    PRODUCT_HELD_BY_USER = 0;
+    HOLDERS_QUEUE_ALREADY_FULL = 1;
+    PRODUCT_NOT_FOUND = 2;
+    PREMATURE_AWAIT = 3;
+}
+
+message Response {
+  uint32 user_id = 1;
+  uint32 product_id = 2;
+  ProductStatus status = 3;
+}

@@ -550,6 +550,7 @@ dependencies = [
  "futures",
  "lapin",
  "prost",
+ "thiserror",
  "tokio",
 ]
 
