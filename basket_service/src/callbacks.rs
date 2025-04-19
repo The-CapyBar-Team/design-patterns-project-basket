@@ -9,7 +9,7 @@ impl BasketContext {
     #[inline(always)]
     pub(crate) fn hold_product_request_received(
         &mut self,
-        args: hold_product_request::Message,
+        args: hold_product_request::Request,
     ) -> hold_product_request::Response {
         match self
             .basket
