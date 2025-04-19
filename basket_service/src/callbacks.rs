@@ -26,50 +26,30 @@ impl BasketContext {
     ) -> hold_or_await_product_request::Response {
         match self
             .basket
-            .add_product_holder(args.product_id, args.user_id)
+            .add_product_holder(args.product_id, args.user_id, args.queue_position)
         {
             Ok(()) => {
                 println!(
-                    "basket_service | successfully held product: product_id={} user_id={}",
+                    "basket_service | hold_product_request_received | successfully held product: product_id={} user_id={}",
                     args.product_id, args.user_id
                 );
                 hold_or_await_product_request::Response {
                     user_id: args.user_id,
                     product_id: args.product_id,
+                    queue_position: args.queue_position,
                     status: hold_or_await_product_request::ProductStatus::ProductHeldByUser.into(),
                 }
             }
-            Err(err @ AddProductHolderError::ProductNotFound(product_id, user_id)) => {
-                eprintln!("basket_service | Error: {}", err);
+            Err(error) => {
+                eprintln!(
+                    "basket_service | hold_product_request_received | Error: {}",
+                    error
+                );
                 hold_or_await_product_request::Response {
-                    user_id: user_id,
-                    product_id: product_id,
-                    status: hold_or_await_product_request::ProductStatus::ProductNotFound.into(),
-                }
-            }
-            Err(err @ AddProductHolderError::HoldersQueueAlreadyFull(product_id, user_id)) => {
-                eprintln!("basket_service | Error: {}", err);
-                hold_or_await_product_request::Response {
-                    user_id: user_id,
-                    product_id: product_id,
-                    status: hold_or_await_product_request::ProductStatus::HoldersQueueAlreadyFull
-                        .into(),
-                }
-            }
-            Err(err @ AddProductHolderError::PrematureAwait(product_id, user_id)) => {
-                eprintln!("basket_service | Error: {}", err);
-                hold_or_await_product_request::Response {
-                    user_id: user_id,
-                    product_id: product_id,
-                    status: hold_or_await_product_request::ProductStatus::PrematureAwait.into(),
-                }
-            }
-            Err(err @ AddProductHolderError::UserAlreadyAdded(product_id, user_id)) => {
-                eprintln!("basket_service | Error: {}", err);
-                hold_or_await_product_request::Response {
-                    user_id: user_id,
-                    product_id: product_id,
-                    status: hold_or_await_product_request::ProductStatus::PrematureAwait.into(),
+                    user_id: args.user_id,
+                    product_id: args.product_id,
+                    queue_position: args.queue_position,
+                    status: add_product_holder_error_to_status(error).into(),
                 }
             }
         }
@@ -82,52 +62,51 @@ impl BasketContext {
     ) -> hold_or_await_product_request::Response {
         match self
             .basket
-            .add_product_awaiter(args.product_id, args.user_id)
+            .add_product_awaiter(args.product_id, args.user_id, args.queue_position)
         {
             Ok(()) => {
                 println!(
-                    "basket_service | successfully held product: product_id={} user_id={}",
+                    "basket_service | await_product_request_received | successfully held product: product_id={} user_id={}",
                     args.product_id, args.user_id
                 );
                 hold_or_await_product_request::Response {
                     user_id: args.user_id,
                     product_id: args.product_id,
+                    queue_position: args.queue_position,
                     status: hold_or_await_product_request::ProductStatus::ProductHeldByUser.into(),
                 }
             }
-            Err(err @ AddProductHolderError::ProductNotFound(product_id, user_id)) => {
-                eprintln!("basket_service | Error: {}", err);
+            Err(error) => {
+                eprintln!(
+                    "basket_service | await_product_request_received | Error: {}",
+                    error
+                );
                 hold_or_await_product_request::Response {
-                    user_id: user_id,
-                    product_id: product_id,
-                    status: hold_or_await_product_request::ProductStatus::ProductNotFound.into(),
+                    user_id: args.user_id,
+                    product_id: args.product_id,
+                    queue_position: args.queue_position,
+                    status: add_product_holder_error_to_status(error).into(),
                 }
             }
-            Err(err @ AddProductHolderError::HoldersQueueAlreadyFull(product_id, user_id)) => {
-                eprintln!("basket_service | Error: {}", err);
-                hold_or_await_product_request::Response {
-                    user_id: user_id,
-                    product_id: product_id,
-                    status: hold_or_await_product_request::ProductStatus::HoldersQueueAlreadyFull
-                        .into(),
-                }
-            }
-            Err(err @ AddProductHolderError::PrematureAwait(product_id, user_id)) => {
-                eprintln!("basket_service | Error: {}", err);
-                hold_or_await_product_request::Response {
-                    user_id: user_id,
-                    product_id: product_id,
-                    status: hold_or_await_product_request::ProductStatus::PrematureAwait.into(),
-                }
-            }
-            Err(err @ AddProductHolderError::UserAlreadyAdded(product_id, user_id)) => {
-                eprintln!("basket_service | Error: {}", err);
-                hold_or_await_product_request::Response {
-                    user_id: user_id,
-                    product_id: product_id,
-                    status: hold_or_await_product_request::ProductStatus::PrematureAwait.into(),
-                }
-            }
+        }
+    }
+}
+
+#[inline(always)]
+fn add_product_holder_error_to_status(
+    error: AddProductHolderError,
+) -> hold_or_await_product_request::ProductStatus {
+    use hold_or_await_product_request::ProductStatus as ProtoStatus;
+
+    match error {
+        AddProductHolderError::ProductNotFound(_, _) => ProtoStatus::ProductNotFound,
+        AddProductHolderError::HoldersQueueAlreadyFull(_, _) => {
+            ProtoStatus::HoldersQueueAlreadyFull
+        }
+        AddProductHolderError::PrematureAwait(_, _) => ProtoStatus::PrematureAwait,
+        AddProductHolderError::UserAlreadyAdded(_, _) => ProtoStatus::UserAlreadyAdded,
+        AddProductHolderError::QueuePositionIsIncorrect(_, _, _) => {
+            ProtoStatus::QueuePositionIsIncorrect
         }
     }
 }
