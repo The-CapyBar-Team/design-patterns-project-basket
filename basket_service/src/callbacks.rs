@@ -61,24 +61,3 @@ impl BasketContext {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::basket::ProductStock;
-    use basket_communication::types::ProductId;
-
-    #[test]
-    fn hold_product_request_basic() {
-        const PRODUCT_ID: ProductId = 123;
-        const INITIAL_STOCK: ProductStock = 100;
-
-        let mut context = BasketContext {
-            basket: Basket::new(|_, _, _| {}),
-        };
-
-        context
-            .basket
-            .update_product_stock(PRODUCT_ID, INITIAL_STOCK);
-    }
-}
