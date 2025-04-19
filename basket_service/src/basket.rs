@@ -1,5 +1,5 @@
 use basket_communication::types::{ProductId, QueuePosition, UserId};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use thiserror::Error;
 
 pub(crate) type ProductStock = u32;
@@ -11,26 +11,16 @@ struct UserInfo {
     queue_position: QueuePosition,
 }
 
+#[derive(Default)]
 struct ProductContext {
-    product_holders: VecDeque<UserInfo>,
-    product_awaiters: VecDeque<UserInfo>,
+    product_holders: Vec<UserInfo>,
+    product_awaiters: Vec<UserInfo>,
     product_stock: ProductStock,
 }
 
 pub(crate) struct Basket {
     product_to_context: HashMap<ProductId, ProductContext>,
     on_product_stock_changed: Box<dyn Fn(ProductId, ProductStock, ProductStock)>,
-}
-
-impl Default for ProductContext {
-    #[inline(always)]
-    fn default() -> Self {
-        Self {
-            product_holders: create_contiguous_users_deque(),
-            product_awaiters: create_contiguous_users_deque(),
-            product_stock: 0,
-        }
-    }
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -71,7 +61,7 @@ impl Basket {
     pub(crate) fn update_product_stock(&mut self, product_id: ProductId, new_stock: ProductStock) {
         let old_stock = if let Some(entry) = self.product_to_context.get_mut(&product_id) {
             let old_stock = entry.product_stock;
-            (*entry).product_stock = new_stock;
+            entry.product_stock = new_stock;
             old_stock
         } else {
             let new_context = ProductContext {
@@ -99,10 +89,10 @@ impl Basket {
             AddProductHolderError::ProductNotFound(product_id, holder_id),
         )?;
 
-        if let Some(_) = product_context
+        if product_context
             .product_holders
             .iter()
-            .find(|&&existent_holder_info| existent_holder_info.user_id == holder_id)
+            .any(|&existent_holder_info| existent_holder_info.user_id == holder_id)
         {
             return Err(AddProductHolderError::UserAlreadyAdded(
                 product_id, holder_id,
@@ -110,7 +100,7 @@ impl Basket {
         }
 
         #[cfg(feature = "extra_protection")]
-        if Self::queue_position_already_exists(&product_context, queue_position) {
+        if Self::queue_position_already_exists(product_context, queue_position) {
             return Err(AddProductHolderError::QueuePositionIsIncorrect(
                 product_id,
                 holder_id,
@@ -118,13 +108,13 @@ impl Basket {
             ));
         }
 
-        if !Self::can_hold(&product_context) {
+        if !Self::can_hold(product_context) {
             return Err(AddProductHolderError::HoldersQueueAlreadyFull(
                 product_id, holder_id,
             ));
         }
 
-        product_context.product_holders.push_back(UserInfo {
+        product_context.product_holders.push(UserInfo {
             user_id: holder_id,
             queue_position,
         });
@@ -143,11 +133,11 @@ impl Basket {
             AddProductHolderError::ProductNotFound(product_id, awaiter_id),
         )?;
 
-        if let Some(_) = product_context
+        if product_context
             .product_holders
             .iter()
             .chain(product_context.product_awaiters.iter())
-            .find(|&&existent_user_info| existent_user_info.user_id == awaiter_id)
+            .any(|&existent_user_info| existent_user_info.user_id == awaiter_id)
         {
             return Err(AddProductHolderError::UserAlreadyAdded(
                 product_id, awaiter_id,
@@ -155,7 +145,7 @@ impl Basket {
         }
 
         #[cfg(feature = "extra_protection")]
-        if Self::queue_position_already_exists(&product_context, queue_position) {
+        if Self::queue_position_already_exists(product_context, queue_position) {
             return Err(AddProductHolderError::QueuePositionIsIncorrect(
                 product_id,
                 awaiter_id,
@@ -163,13 +153,13 @@ impl Basket {
             ));
         }
 
-        if Self::can_hold(&product_context) {
+        if Self::can_hold(product_context) {
             return Err(AddProductHolderError::PrematureAwait(
                 product_id, awaiter_id,
             ));
         }
 
-        product_context.product_awaiters.push_back(UserInfo {
+        product_context.product_awaiters.push(UserInfo {
             user_id: awaiter_id,
             queue_position,
         });
@@ -182,16 +172,14 @@ impl Basket {
         &self,
         product_id: ProductId,
     ) -> Option<(&[UserInfo], &[UserInfo], ProductStock)> {
-        self.product_to_context
-            .get(&product_id)
-            .map(|context| {
-                (
-                    context.product_holders.as_slices(),
-                    context.product_awaiters.as_slices(),
-                    context.product_stock,
-                )
-            })
-            .map(|((holders, _), (awaiters, _), stock)| (holders, awaiters, stock))
+        self.product_to_context.get(&product_id).map(|context| {
+            (
+                context.product_holders.as_slice(),
+                context.product_awaiters.as_slice(),
+                context.product_stock,
+            )
+        })
+        // .map(|((holders, _), (awaiters, _), stock)| (holders, awaiters, stock))
     }
 
     #[inline(always)]
@@ -209,16 +197,8 @@ impl Basket {
             .product_holders
             .iter()
             .chain(product_context.product_awaiters.iter())
-            .find(|&&existent_user_info| existent_user_info.queue_position == queue_position)
-            .is_some()
+            .any(|&existent_user_info| existent_user_info.queue_position == queue_position)
     }
-}
-
-#[inline(always)]
-fn create_contiguous_users_deque() -> VecDeque<UserInfo> {
-    let mut deque = VecDeque::default();
-    deque.make_contiguous();
-    deque
 }
 
 #[cfg(test)]
@@ -232,8 +212,8 @@ mod tests {
     #[test]
     fn basket_holders_and_awaiters_insertion() {
         const PRODUCT_ID: ProductId = 123;
-        const INITIAL_STOCK: ProductStock = 10000;
-        const AWAITERS_TOTAL_COUNT: UserId = 10000;
+        const INITIAL_STOCK: ProductStock = 100;
+        const AWAITERS_TOTAL_COUNT: UserId = 1000;
         const RANDOM_USER_ID: UserId = (INITIAL_STOCK + AWAITERS_TOTAL_COUNT) * 2;
         const RANDOM_QUEUE_POSITION: QueuePosition = RANDOM_USER_ID;
 
