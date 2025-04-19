@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package hold_product_request;
+package hold_or_await_product_request;
 
 enum ProductStatus {
     PRODUCT_HELD_BY_USER = 0;

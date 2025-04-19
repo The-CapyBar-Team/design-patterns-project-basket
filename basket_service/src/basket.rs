@@ -258,7 +258,10 @@ mod tests {
 
         for user_id in 0..INITIAL_STOCK {
             let awaiter_addition_try = basket.add_product_awaiter(PRODUCT_ID, user_id);
-            assert_eq!(awaiter_addition_try, Err(AddProductHolderError::UserAlreadyAdded(PRODUCT_ID, user_id)));
+            assert_eq!(
+                awaiter_addition_try,
+                Err(AddProductHolderError::UserAlreadyAdded(PRODUCT_ID, user_id))
+            );
         }
 
         for user_id in not_added_holder..(not_added_holder + AWAITERS_TOTAL_COUNT) {
@@ -267,8 +270,10 @@ mod tests {
         }
 
         let (holders, awaiters, stock) = basket.product_context(PRODUCT_ID).unwrap();
-        let expected_holders: Box<[UserId; INITIAL_STOCK as usize]> = Box::new(std::array::from_fn(|idx| idx as UserId));
-        let expected_awaiters: Box<[UserId; AWAITERS_TOTAL_COUNT as usize]> = Box::new(std::array::from_fn(|idx| INITIAL_STOCK + idx as UserId));
+        let expected_holders: Box<[UserId; INITIAL_STOCK as usize]> =
+            Box::new(std::array::from_fn(|idx| idx as UserId));
+        let expected_awaiters: Box<[UserId; AWAITERS_TOTAL_COUNT as usize]> =
+            Box::new(std::array::from_fn(|idx| INITIAL_STOCK + idx as UserId));
         assert_eq!(holders, expected_holders.as_slice());
         assert_eq!(awaiters, expected_awaiters.as_slice());
         assert_eq!(stock, INITIAL_STOCK);
