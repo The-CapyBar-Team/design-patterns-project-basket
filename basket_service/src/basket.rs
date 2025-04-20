@@ -1,5 +1,5 @@
 use basket_communication::types::{ProductId, QueuePosition, UserId};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use thiserror::Error;
 
 pub(crate) type ProductStock = u32;
@@ -11,10 +11,9 @@ struct UserInfo {
     queue_position: QueuePosition,
 }
 
-#[derive(Default)]
 struct ProductContext {
-    product_holders: Vec<UserInfo>,
-    product_awaiters: Vec<UserInfo>,
+    product_holders: VecDeque<UserInfo>,
+    product_awaiters: VecDeque<UserInfo>,
     product_stock: ProductStock,
 }
 
@@ -44,6 +43,16 @@ pub(crate) enum AddProductHolderError {
     #[cfg(feature = "extra_protection")]
     #[error("[UserId='`{1}`'] The queue position {2} is already occupied for product with id {0}")]
     QueuePositionIsIncorrect(ProductId, UserId, QueuePosition),
+}
+
+impl Default for ProductContext {
+    fn default() -> Self {
+        Self {
+            product_holders: create_contiguous_users_deque(),
+            product_awaiters: create_contiguous_users_deque(),
+            product_stock: Default::default()
+        }
+    }
 }
 
 impl Basket {
@@ -114,7 +123,7 @@ impl Basket {
             ));
         }
 
-        product_context.product_holders.push(UserInfo {
+        product_context.product_holders.push_back(UserInfo {
             user_id: holder_id,
             queue_position,
         });
@@ -159,7 +168,7 @@ impl Basket {
             ));
         }
 
-        product_context.product_awaiters.push(UserInfo {
+        product_context.product_awaiters.push_back(UserInfo {
             user_id: awaiter_id,
             queue_position,
         });
@@ -174,12 +183,12 @@ impl Basket {
     ) -> Option<(&[UserInfo], &[UserInfo], ProductStock)> {
         self.product_to_context.get(&product_id).map(|context| {
             (
-                context.product_holders.as_slice(),
-                context.product_awaiters.as_slice(),
+                context.product_holders.as_slices(),
+                context.product_awaiters.as_slices(),
                 context.product_stock,
             )
         })
-        // .map(|((holders, _), (awaiters, _), stock)| (holders, awaiters, stock))
+        .map(|((holders, _), (awaiters, _), stock)| (holders, awaiters, stock))
     }
 
     #[inline(always)]
@@ -199,6 +208,13 @@ impl Basket {
             .chain(product_context.product_awaiters.iter())
             .any(|&existent_user_info| existent_user_info.queue_position == queue_position)
     }
+}
+
+#[inline(always)]
+fn create_contiguous_users_deque() -> VecDeque<UserInfo> {
+    let mut deque = VecDeque::default();
+    deque.make_contiguous();
+    deque
 }
 
 #[cfg(test)]
