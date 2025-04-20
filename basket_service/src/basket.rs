@@ -25,7 +25,7 @@ pub(crate) struct Basket {
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
-pub(crate) enum AddProductHolderError {
+pub(crate) enum BasketError {
     #[error("[UserId='`{1}`'] Product with id '`{0}`' is not available")]
     ProductNotFound(ProductId, UserId),
 
@@ -95,24 +95,23 @@ impl Basket {
         product_id: ProductId,
         holder_id: UserId,
         queue_position: QueuePosition,
-    ) -> Result<(), AddProductHolderError> {
-        let product_context = self.product_to_context.get_mut(&product_id).ok_or(
-            AddProductHolderError::ProductNotFound(product_id, holder_id),
-        )?;
+    ) -> Result<(), BasketError> {
+        let product_context = self
+            .product_to_context
+            .get_mut(&product_id)
+            .ok_or(BasketError::ProductNotFound(product_id, holder_id))?;
 
         if product_context
             .product_holders
             .iter()
             .any(|&existent_holder_info| existent_holder_info.user_id == holder_id)
         {
-            return Err(AddProductHolderError::UserAlreadyAdded(
-                product_id, holder_id,
-            ));
+            return Err(BasketError::UserAlreadyAdded(product_id, holder_id));
         }
 
         #[cfg(feature = "extra_protection")]
         if Self::queue_position_already_exists(product_context, queue_position) {
-            return Err(AddProductHolderError::QueuePositionIsIncorrect(
+            return Err(BasketError::QueuePositionIsIncorrect(
                 product_id,
                 holder_id,
                 queue_position,
@@ -120,9 +119,7 @@ impl Basket {
         }
 
         if !Self::can_hold(product_context) {
-            return Err(AddProductHolderError::HoldersQueueAlreadyFull(
-                product_id, holder_id,
-            ));
+            return Err(BasketError::HoldersQueueAlreadyFull(product_id, holder_id));
         }
 
         product_context.product_holders.push_back(UserInfo {
@@ -139,10 +136,11 @@ impl Basket {
         product_id: ProductId,
         awaiter_id: UserId,
         queue_position: QueuePosition,
-    ) -> Result<(), AddProductHolderError> {
-        let product_context = self.product_to_context.get_mut(&product_id).ok_or(
-            AddProductHolderError::ProductNotFound(product_id, awaiter_id),
-        )?;
+    ) -> Result<(), BasketError> {
+        let product_context = self
+            .product_to_context
+            .get_mut(&product_id)
+            .ok_or(BasketError::ProductNotFound(product_id, awaiter_id))?;
 
         if product_context
             .product_holders
@@ -150,14 +148,12 @@ impl Basket {
             .chain(product_context.product_awaiters.iter())
             .any(|&existent_user_info| existent_user_info.user_id == awaiter_id)
         {
-            return Err(AddProductHolderError::UserAlreadyAdded(
-                product_id, awaiter_id,
-            ));
+            return Err(BasketError::UserAlreadyAdded(product_id, awaiter_id));
         }
 
         #[cfg(feature = "extra_protection")]
         if Self::queue_position_already_exists(product_context, queue_position) {
-            return Err(AddProductHolderError::QueuePositionIsIncorrect(
+            return Err(BasketError::QueuePositionIsIncorrect(
                 product_id,
                 awaiter_id,
                 queue_position,
@@ -165,9 +161,7 @@ impl Basket {
         }
 
         if Self::can_hold(product_context) {
-            return Err(AddProductHolderError::PrematureAwait(
-                product_id, awaiter_id,
-            ));
+            return Err(BasketError::PrematureAwait(product_id, awaiter_id));
         }
 
         product_context.product_awaiters.push_back(UserInfo {
@@ -187,11 +181,11 @@ impl Basket {
         &mut self,
         product_id: ProductId,
         user_id: UserId,
-    ) -> Result<UserId, AddProductHolderError> {
+    ) -> Result<UserId, BasketError> {
         let mut product_context = self
             .product_to_context
             .get_mut(&product_id)
-            .ok_or(AddProductHolderError::ProductNotFound(product_id, user_id))?;
+            .ok_or(BasketError::ProductNotFound(product_id, user_id))?;
 
         if let Some(found_index) = product_context
             .product_holders
@@ -201,7 +195,7 @@ impl Basket {
             product_context.product_holders.remove(found_index);
             Ok(())
         } else {
-            Err(AddProductHolderError::ProductNotFound(product_id, user_id))
+            Err(BasketError::ProductNotFound(product_id, user_id))
         }?;
 
         let new_holder = Self::fill_available_holder_slots(product_context);
@@ -213,7 +207,9 @@ impl Basket {
     // if we know that we have only one free slot (prevent vec allocation)
     #[inline(always)]
     fn fill_available_holder_slots(product_context: &mut ProductContext) -> Vec<UserId> {
-        debug_assert!(product_context.product_stock as usize >= product_context.product_holders.len());
+        debug_assert!(
+            product_context.product_stock as usize >= product_context.product_holders.len()
+        );
 
         let free_slots_count =
             product_context.product_stock as usize - product_context.product_holders.len();
@@ -301,17 +297,11 @@ mod tests {
 
         assert_eq!(
             holder_addition_try,
-            Err(AddProductHolderError::ProductNotFound(
-                PRODUCT_ID,
-                RANDOM_USER_ID
-            ))
+            Err(BasketError::ProductNotFound(PRODUCT_ID, RANDOM_USER_ID))
         );
         assert_eq!(
             awaiter_addition_try,
-            Err(AddProductHolderError::ProductNotFound(
-                PRODUCT_ID,
-                RANDOM_USER_ID
-            ))
+            Err(BasketError::ProductNotFound(PRODUCT_ID, RANDOM_USER_ID))
         );
 
         basket.update_product_stock(PRODUCT_ID, INITIAL_STOCK);
@@ -326,10 +316,7 @@ mod tests {
             basket.add_product_awaiter(PRODUCT_ID, RANDOM_USER_ID, RANDOM_QUEUE_POSITION);
         assert_eq!(
             awaiter_addition_try,
-            Err(AddProductHolderError::PrematureAwait(
-                PRODUCT_ID,
-                RANDOM_USER_ID
-            ))
+            Err(BasketError::PrematureAwait(PRODUCT_ID, RANDOM_USER_ID))
         );
 
         for user_id in 0..(INITIAL_STOCK - 1) {
@@ -343,10 +330,7 @@ mod tests {
             basket.add_product_awaiter(PRODUCT_ID, RANDOM_USER_ID, RANDOM_QUEUE_POSITION);
         assert_eq!(
             awaiter_addition_try,
-            Err(AddProductHolderError::PrematureAwait(
-                PRODUCT_ID,
-                RANDOM_USER_ID
-            ))
+            Err(BasketError::PrematureAwait(PRODUCT_ID, RANDOM_USER_ID))
         );
 
         let last_holder_id = INITIAL_STOCK - 1;
@@ -362,7 +346,7 @@ mod tests {
                 basket.add_product_holder(PRODUCT_ID, user_id, queue_position_from(user_id));
             assert_eq!(
                 holder_addition_try,
-                Err(AddProductHolderError::UserAlreadyAdded(PRODUCT_ID, user_id))
+                Err(BasketError::UserAlreadyAdded(PRODUCT_ID, user_id))
             );
         }
 
@@ -375,7 +359,7 @@ mod tests {
 
         assert_eq!(
             holder_addition_try,
-            Err(AddProductHolderError::HoldersQueueAlreadyFull(
+            Err(BasketError::HoldersQueueAlreadyFull(
                 PRODUCT_ID,
                 not_added_holder
             ))
@@ -386,7 +370,7 @@ mod tests {
                 basket.add_product_awaiter(PRODUCT_ID, user_id, queue_position_from(user_id));
             assert_eq!(
                 awaiter_addition_try,
-                Err(AddProductHolderError::UserAlreadyAdded(PRODUCT_ID, user_id))
+                Err(BasketError::UserAlreadyAdded(PRODUCT_ID, user_id))
             );
         }
 

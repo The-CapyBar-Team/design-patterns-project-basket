@@ -1,4 +1,4 @@
-use crate::basket::{AddProductHolderError, Basket};
+use crate::basket::{Basket, BasketError};
 use basket_communication::{hold_or_await_product_request, update_product_stock_request};
 
 pub(crate) struct BasketContext {
@@ -94,19 +94,15 @@ impl BasketContext {
 
 #[inline(always)]
 fn add_product_holder_error_to_status(
-    error: AddProductHolderError,
+    error: BasketError,
 ) -> hold_or_await_product_request::ProductStatus {
     use hold_or_await_product_request::ProductStatus as ProtoStatus;
 
     match error {
-        AddProductHolderError::ProductNotFound(_, _) => ProtoStatus::ProductNotFound,
-        AddProductHolderError::HoldersQueueAlreadyFull(_, _) => {
-            ProtoStatus::HoldersQueueAlreadyFull
-        }
-        AddProductHolderError::PrematureAwait(_, _) => ProtoStatus::PrematureAwait,
-        AddProductHolderError::UserAlreadyAdded(_, _) => ProtoStatus::UserAlreadyAdded,
-        AddProductHolderError::QueuePositionIsIncorrect(_, _, _) => {
-            ProtoStatus::QueuePositionIsIncorrect
-        }
+        BasketError::ProductNotFound(_, _) => ProtoStatus::ProductNotFound,
+        BasketError::HoldersQueueAlreadyFull(_, _) => ProtoStatus::HoldersQueueAlreadyFull,
+        BasketError::PrematureAwait(_, _) => ProtoStatus::PrematureAwait,
+        BasketError::UserAlreadyAdded(_, _) => ProtoStatus::UserAlreadyAdded,
+        BasketError::QueuePositionIsIncorrect(_, _, _) => ProtoStatus::QueuePositionIsIncorrect,
     }
 }
