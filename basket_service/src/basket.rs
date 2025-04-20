@@ -2,6 +2,8 @@ use basket_communication::types::{ProductId, QueuePosition, UserId};
 use std::collections::{HashMap, VecDeque};
 use thiserror::Error;
 
+// TODO: think of replacing VecDeque with HashMap
+
 pub(crate) type ProductStock = u32;
 
 #[derive(Default, Clone, Copy)]
@@ -50,7 +52,7 @@ impl Default for ProductContext {
         Self {
             product_holders: create_contiguous_users_deque(),
             product_awaiters: create_contiguous_users_deque(),
-            product_stock: Default::default()
+            product_stock: Default::default(),
         }
     }
 }
@@ -176,19 +178,75 @@ impl Basket {
         Ok(())
     }
 
+    // TODO: we could use binary search here if user sent their queue_position
+    // together with its user_id. The queue_positions could be ordered.
+    // TODO: add decreasing of queue position to be done within this function
+    // so that encapsulation is adhered to
+    #[inline(always)]
+    pub(crate) fn remove_holder_of_product(
+        &mut self,
+        product_id: ProductId,
+        user_id: UserId,
+    ) -> Result<UserId, AddProductHolderError> {
+        let mut product_context = self
+            .product_to_context
+            .get_mut(&product_id)
+            .ok_or(AddProductHolderError::ProductNotFound(product_id, user_id))?;
+
+        if let Some(found_index) = product_context
+            .product_holders
+            .iter()
+            .position(|info| info.user_id == user_id)
+        {
+            product_context.product_holders.remove(found_index);
+            Ok(())
+        } else {
+            Err(AddProductHolderError::ProductNotFound(product_id, user_id))
+        }?;
+
+        let new_holder = Self::fill_available_holder_slots(product_context);
+        debug_assert!(new_holder.len() == 1);
+        Ok(*new_holder.first().unwrap())
+    }
+
+    // TODO: we could optimize this by providing the function that returns a single element
+    // if we know that we have only one free slot (prevent vec allocation)
+    #[inline(always)]
+    fn fill_available_holder_slots(product_context: &mut ProductContext) -> Vec<UserId> {
+        debug_assert!(product_context.product_stock as usize >= product_context.product_holders.len());
+
+        let free_slots_count =
+            product_context.product_stock as usize - product_context.product_holders.len();
+        let mut new_holders_ids = Vec::with_capacity(free_slots_count);
+
+        for _ in 0..free_slots_count {
+            let new_holder_id = product_context
+                .product_awaiters
+                .pop_front()
+                .map(|new_holder| {
+                    new_holders_ids.push(new_holder.user_id);
+                    product_context.product_holders.push_back(new_holder);
+                });
+        }
+
+        new_holders_ids
+    }
+
     #[cfg(test)]
     pub(crate) fn product_context(
         &self,
         product_id: ProductId,
     ) -> Option<(&[UserInfo], &[UserInfo], ProductStock)> {
-        self.product_to_context.get(&product_id).map(|context| {
-            (
-                context.product_holders.as_slices(),
-                context.product_awaiters.as_slices(),
-                context.product_stock,
-            )
-        })
-        .map(|((holders, _), (awaiters, _), stock)| (holders, awaiters, stock))
+        self.product_to_context
+            .get(&product_id)
+            .map(|context| {
+                (
+                    context.product_holders.as_slices(),
+                    context.product_awaiters.as_slices(),
+                    context.product_stock,
+                )
+            })
+            .map(|((holders, _), (awaiters, _), stock)| (holders, awaiters, stock))
     }
 
     #[inline(always)]
