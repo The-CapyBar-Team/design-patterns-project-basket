@@ -1,10 +1,8 @@
-use basket_communication::types::{ProductId, QueuePosition, UserId};
+use basket_communication::types::{ProductId, QueuePosition, UserId, ProductStock};
 use std::collections::{HashMap, VecDeque};
 use thiserror::Error;
 
 // TODO: think of replacing VecDeque with HashMap
-
-pub(crate) type ProductStock = u32;
 
 #[derive(Default, Clone, Copy)]
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
