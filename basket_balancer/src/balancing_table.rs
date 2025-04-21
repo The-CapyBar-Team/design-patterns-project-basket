@@ -1,11 +1,11 @@
 use crate::error::BalancerError;
 use crate::requests;
 use crate::types::BasketId;
-use basket_communication::hp_request::{
+use basket_communication::basket_service::hp_request::{
     Request as hp_or_ap_request, Response as hp_or_ap_response,
 };
+use basket_communication::basket_service::ups_request::Request as ups_request;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
-use basket_communication::ups_request::Request as ups_request;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 

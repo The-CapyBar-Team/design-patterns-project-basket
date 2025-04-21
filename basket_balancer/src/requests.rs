@@ -1,16 +1,12 @@
 use crate::types::BasketId;
+use basket_communication::basket_service::ups_request;
 use basket_communication::types::{ProductId, UserId};
-use basket_communication::ups_request;
 
 // UPS = "Update Product's Stock"
 // HP = "Hold Product"
 // AP = "Await Request"
 pub(crate) trait RequestSender {
-    fn perform_ups_request(
-        &mut self,
-        basket_id: BasketId,
-        request_args: ups_request::Request,
-    );
+    fn perform_ups_request(&mut self, basket_id: BasketId, request_args: ups_request::Request);
 
     fn perform_hp_request(
         &mut self,
@@ -26,11 +22,7 @@ pub(crate) trait RequestSender {
 pub(crate) struct BasicRequestSender;
 
 impl RequestSender for BasicRequestSender {
-    fn perform_ups_request(
-        &mut self,
-        basket_id: BasketId,
-        request_args: ups_request::Request,
-    ) {
+    fn perform_ups_request(&mut self, basket_id: BasketId, request_args: ups_request::Request) {
         println!(
             "Sending stock (={}) of product #{} update to basket #{}",
             request_args.product_stock, request_args.product_id, basket_id

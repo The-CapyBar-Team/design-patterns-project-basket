@@ -1,5 +1,5 @@
 use basket::Basket;
-use basket_communication::ups_request::ups_service_server::UpsServiceServer;
+use basket_communication::basket_service::basket_service_server::BasketServiceServer; //ups_request::ups_service_server::UpsServiceServer;
 use callbacks::*;
 use tonic::transport::Server;
 
@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
     println!("Server listening on {}", addr);
 
     Server::builder()
-        .add_service(UpsServiceServer::new(basket_context))
+        .add_service(BasketServiceServer::new(basket_context))
         .serve(addr)
         .await?;
 

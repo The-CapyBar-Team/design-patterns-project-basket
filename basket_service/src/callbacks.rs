@@ -1,6 +1,6 @@
 use crate::basket::{Basket, BasketError};
-use basket_communication::ups_request::ups_service_server as ups_server;
-use basket_communication::{hp_request, ups_request};
+use basket_communication::basket_service::basket_service_server;
+use basket_communication::basket_service::{hp_request, ups_request};
 use std::sync::Mutex;
 use tonic::{Request, Response, Status};
 
@@ -9,7 +9,7 @@ pub(crate) struct BasketContext {
 }
 
 #[tonic::async_trait]
-impl ups_server::UpsService for BasketContext {
+impl basket_service_server::BasketService for BasketContext {
     #[inline(always)]
     async fn perform_ups(
         &self,

@@ -2,12 +2,6 @@ syntax = "proto3";
 
 package ups_request;
 
-import "google/protobuf/empty.proto";
-
-service UpsService {
-  rpc perform_ups (Request) returns (Response);
-}
-
 message Request {
   uint32 product_id = 1;
   uint32 product_stock = 2;

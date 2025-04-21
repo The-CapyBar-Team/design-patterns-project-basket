@@ -5,7 +5,7 @@ WORKDIR /usr/src/app
 COPY ../ .
 
 ARG BASKET_PROTO_DIRECTORY_PATH
-ARG BASKET_BIN
+ENV BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
 
 RUN apt update                                                          && \
     apt install -y protobuf-compiler                                    && \
