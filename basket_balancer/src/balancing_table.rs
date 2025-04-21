@@ -1,8 +1,12 @@
+use crate::error::BalancerError;
+use crate::requests::*;
+use crate::types::BasketId;
+use basket_communication::hold_or_await_product_request::{
+    Request as hp_or_ap_request, Response as hp_or_ap_response,
+};
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
+use basket_communication::update_product_stock_request::Request as ups_request;
 use std::collections::HashMap;
-use thiserror::Error;
-
-type BasketId = u8;
 
 const NUMBER_OF_BASKETS: BasketId = 4;
 
@@ -17,37 +21,40 @@ pub(crate) struct BalancingTable {
     products_to_balancing_info: HashMap<ProductId, ProductBalancingInfo>,
 }
 
-#[derive(Error, Debug, PartialEq, Eq)]
-pub(crate) enum BalancerError {
-    #[error("[UserId='`{1}`'] Product with id '`{0}`' is not available")]
-    ProductNotFound(ProductId, UserId),
-}
-
 impl BalancingTable {
+    // TODO: implement resilience strategy in case of some baskets getting dead
     #[inline(always)]
     pub(crate) fn on_product_stock_updated(&mut self, product_id: ProductId, stock: ProductStock) {
         let stock_distribution = distribute_stock(stock);
+        let available_baskets = {
+            let mut available_baskets = Vec::new();
+
+            for basket_id in 0..NUMBER_OF_BASKETS {
+                perform_ups_request(
+                    basket_id,
+                    ups_request {
+                        product_id,
+                        product_stock: stock,
+                    },
+                );
+                available_baskets.push(basket_id);
+            }
+
+            available_baskets
+        };
 
         if let Some(balancing_info) = self.products_to_balancing_info.get_mut(&product_id) {
-            balancing_info.available_baskets = Vec::new();
-
-            for basket_id in 0..NUMBER_OF_BASKETS {
-                update_product_stock_on_basket(basket_id, stock_distribution[basket_id as usize]);
-                balancing_info.available_baskets.push(basket_id);
-            }
+            balancing_info.available_baskets = available_baskets;
         } else {
-            let mut new_balancing_info = ProductBalancingInfo {
-                available_baskets: Vec::new(),
-                queue_size: 0,
-            };
+            let replaced_balancing_info = self.products_to_balancing_info.insert(
+                product_id,
+                ProductBalancingInfo {
+                    available_baskets,
+                    queue_size: 0,
+                },
+            );
 
-            for basket_id in 0..NUMBER_OF_BASKETS {
-                update_product_stock_on_basket(basket_id, stock_distribution[basket_id as usize]);
-                new_balancing_info.available_baskets.push(basket_id);
-            }
-
-            self.products_to_balancing_info
-                .insert(product_id, new_balancing_info);
+            debug_assert!(replaced_balancing_info.is_none());
         }
     }
 
@@ -118,35 +125,6 @@ fn choose_next_basket(available_baskets: &[BasketId]) -> Option<BasketId> {
 #[inline(always)]
 fn all_baskets() -> [BasketId; NUMBER_OF_BASKETS as usize] {
     std::array::from_fn(|id| id as BasketId)
-}
-
-fn update_product_stock_on_basket(basket_id: BasketId, stock_update: ProductStock) {
-    println!(
-        "Sending stock (={}) update to basket #{}",
-        stock_update, basket_id
-    );
-}
-
-// HP = "Hold Product"
-fn delegate_hp_request_to_backet(
-    basket_id: BasketId,
-    product_id: ProductId,
-    user_id: UserId,
-) -> bool {
-    println!(
-        "Delegating to basket #{} holding product: product_id = {}, user_id = {}",
-        basket_id, product_id, user_id
-    );
-
-    true
-}
-
-// AP = "Await Request"
-fn delegate_ap_request_to_basket(basket_id: BasketId, product_id: ProductId, user_id: UserId) {
-    println!(
-        "Delegating to basket #{} awaiting product: product_id = {}, user_id = {}",
-        basket_id, product_id, user_id
-    );
 }
 
 #[cfg(test)]
