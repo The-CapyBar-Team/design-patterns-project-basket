@@ -1,11 +1,11 @@
 use crate::error::BalancerError;
 use crate::requests;
 use crate::types::BasketId;
-use basket_communication::hold_or_await_product_request::{
+use basket_communication::hp_request::{
     Request as hp_or_ap_request, Response as hp_or_ap_response,
 };
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
-use basket_communication::update_product_stock_request::Request as ups_request;
+use basket_communication::ups_request::Request as ups_request;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
@@ -183,7 +183,7 @@ mod tests {
         fn perform_ups_request(
             &mut self,
             basket_id: BasketId,
-            request_args: basket_communication::update_product_stock_request::Request,
+            request_args: basket_communication::ups_request::Request,
         ) {
             let basket_data = self.resolve_basket_map(basket_id).unwrap();
             basket_data.insert(

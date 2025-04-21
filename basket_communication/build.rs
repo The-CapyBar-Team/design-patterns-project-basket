@@ -4,8 +4,8 @@ fn main() {
     let proto_dir_path = env::var("BASKET_PROTO_DIRECTORY_PATH").unwrap();
     let proto_files = [
         "add_to_queue_request.proto",
-        "hold_or_await_product_request.proto",
-        "update_product_stock_request.proto",
+        "hp_request.proto",
+        "ups_request.proto",
     ];
     let proto_paths = proto_files.map(|proto_file| format!("{}/{}", proto_dir_path, proto_file));
 

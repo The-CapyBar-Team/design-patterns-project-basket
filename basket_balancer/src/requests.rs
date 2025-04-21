@@ -1,6 +1,6 @@
 use crate::types::BasketId;
 use basket_communication::types::{ProductId, UserId};
-use basket_communication::update_product_stock_request;
+use basket_communication::ups_request;
 
 // UPS = "Update Product's Stock"
 // HP = "Hold Product"
@@ -9,7 +9,7 @@ pub(crate) trait RequestSender {
     fn perform_ups_request(
         &mut self,
         basket_id: BasketId,
-        request_args: update_product_stock_request::Request,
+        request_args: ups_request::Request,
     );
 
     fn perform_hp_request(
@@ -29,7 +29,7 @@ impl RequestSender for BasicRequestSender {
     fn perform_ups_request(
         &mut self,
         basket_id: BasketId,
-        request_args: update_product_stock_request::Request,
+        request_args: ups_request::Request,
     ) {
         println!(
             "Sending stock (={}) of product #{} update to basket #{}",

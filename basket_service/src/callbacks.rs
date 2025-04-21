@@ -1,5 +1,5 @@
 use crate::basket::{Basket, BasketError};
-use basket_communication::{hold_or_await_product_request, update_product_stock_request};
+use basket_communication::{hp_request, ups_request};
 
 pub(crate) struct BasketContext {
     pub basket: Basket,
@@ -9,7 +9,7 @@ impl BasketContext {
     #[inline(always)]
     pub(crate) fn update_product_stock_requeest_received(
         &mut self,
-        args: update_product_stock_request::Request,
+        args: ups_request::Request,
     ) {
         println!(
             "basket_service | stock updated for product: product_id={} new_stock={}",
@@ -22,8 +22,8 @@ impl BasketContext {
     #[inline(always)]
     pub(crate) fn hold_product_request_received(
         &mut self,
-        args: hold_or_await_product_request::Request,
-    ) -> hold_or_await_product_request::Response {
+        args: hp_request::Request,
+    ) -> hp_request::Response {
         match self
             .basket
             .add_product_holder(args.product_id, args.user_id, args.queue_position)
@@ -33,11 +33,11 @@ impl BasketContext {
                     "basket_service | hold_product_request_received | successfully held product: product_id={} user_id={}",
                     args.product_id, args.user_id
                 );
-                hold_or_await_product_request::Response {
+                hp_request::Response {
                     user_id: args.user_id,
                     product_id: args.product_id,
                     queue_position: args.queue_position,
-                    status: hold_or_await_product_request::ProductStatus::ProductHeldByUser.into(),
+                    status: hp_request::ProductStatus::ProductHeldByUser.into(),
                 }
             }
             Err(error) => {
@@ -45,7 +45,7 @@ impl BasketContext {
                     "basket_service | hold_product_request_received | Error: {}",
                     error
                 );
-                hold_or_await_product_request::Response {
+                hp_request::Response {
                     user_id: args.user_id,
                     product_id: args.product_id,
                     queue_position: args.queue_position,
@@ -58,8 +58,8 @@ impl BasketContext {
     #[inline(always)]
     pub(crate) fn await_product_request_received(
         &mut self,
-        args: hold_or_await_product_request::Request,
-    ) -> hold_or_await_product_request::Response {
+        args: hp_request::Request,
+    ) -> hp_request::Response {
         match self
             .basket
             .add_product_awaiter(args.product_id, args.user_id, args.queue_position)
@@ -69,11 +69,11 @@ impl BasketContext {
                     "basket_service | await_product_request_received | successfully held product: product_id={} user_id={}",
                     args.product_id, args.user_id
                 );
-                hold_or_await_product_request::Response {
+                hp_request::Response {
                     user_id: args.user_id,
                     product_id: args.product_id,
                     queue_position: args.queue_position,
-                    status: hold_or_await_product_request::ProductStatus::ProductHeldByUser.into(),
+                    status: hp_request::ProductStatus::ProductHeldByUser.into(),
                 }
             }
             Err(error) => {
@@ -81,7 +81,7 @@ impl BasketContext {
                     "basket_service | await_product_request_received | Error: {}",
                     error
                 );
-                hold_or_await_product_request::Response {
+                hp_request::Response {
                     user_id: args.user_id,
                     product_id: args.product_id,
                     queue_position: args.queue_position,
@@ -95,8 +95,8 @@ impl BasketContext {
 #[inline(always)]
 fn add_product_holder_error_to_status(
     error: BasketError,
-) -> hold_or_await_product_request::ProductStatus {
-    use hold_or_await_product_request::ProductStatus as ProtoStatus;
+) -> hp_request::ProductStatus {
+    use hp_request::ProductStatus as ProtoStatus;
 
     match error {
         BasketError::ProductNotFound(_, _) => ProtoStatus::ProductNotFound,
