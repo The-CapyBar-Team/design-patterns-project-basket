@@ -1,8 +1,5 @@
 mod hp_request {
-    include!(concat!(
-        env!("OUT_DIR"),
-        "/hp_request.rs"
-    ));
+    tonic::include_proto!("hp_request");
 }
 
 pub use hp_request::*;

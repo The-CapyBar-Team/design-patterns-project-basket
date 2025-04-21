@@ -12,9 +12,3 @@ message Request {
   uint32 product_id = 1;
   uint32 product_stock = 2;
 }
-
-// message Response {
-//   uint32 user_id = 1;
-//   uint32 product_id = 2;
-//   ProductStatus status = 3;
-// }

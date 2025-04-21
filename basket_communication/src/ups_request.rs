@@ -1,5 +1,5 @@
 mod ups_request {
-    include!(concat!(env!("OUT_DIR"), "/ups_request.rs"));
+    tonic::include_proto!("ups_request");
 }
 
 pub use ups_request::*;
