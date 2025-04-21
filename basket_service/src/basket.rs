@@ -1,4 +1,4 @@
-use basket_communication::types::{ProductId, QueuePosition, UserId, ProductStock};
+use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
 use std::collections::{HashMap, VecDeque};
 use thiserror::Error;
 
@@ -19,7 +19,8 @@ struct ProductContext {
 
 pub(crate) struct Basket {
     product_to_context: HashMap<ProductId, ProductContext>,
-    on_product_stock_changed: Box<dyn Fn(ProductId, ProductStock, ProductStock)>,
+    on_product_stock_changed:
+        Box<dyn Fn(ProductId, ProductStock, ProductStock) + Send + Sync + 'static>,
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -58,7 +59,7 @@ impl Default for ProductContext {
 impl Basket {
     #[inline(always)]
     pub(crate) fn new(
-        on_product_stock_changed: impl Fn(ProductId, ProductStock, ProductStock) + 'static,
+        on_product_stock_changed: impl Fn(ProductId, ProductStock, ProductStock) + Send + Sync + 'static,
     ) -> Self {
         Self {
             product_to_context: Default::default(),
@@ -180,7 +181,7 @@ impl Basket {
         product_id: ProductId,
         user_id: UserId,
     ) -> Result<UserId, BasketError> {
-        let mut product_context = self
+        let product_context = self
             .product_to_context
             .get_mut(&product_id)
             .ok_or(BasketError::ProductNotFound(product_id, user_id))?;

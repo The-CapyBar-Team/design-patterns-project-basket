@@ -1,22 +1,13 @@
 services:
-  rabbit:
-    image: rabbitmq:4
-    volumes:
-        - ./persistent_data/rabbitmq/conf:/etc/rabbitmq/
-        - ./persistent_data/rabbitmq/data/:/var/lib/rabbitmq/
-        - ./persistent_data/rabbitmq/logs/:/var/log/rabbitmq/
+  basket_balancer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
     environment:
-        RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-secret_cookie}
-        RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-admin}
-        RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-admin}
-    ports:
-        - 5672:5672
-        - 15672:15672
-    healthcheck:
-      test: [ "CMD", "rabbitmqctl", "status"]
-      interval: 5s
-      timeout: 20s
-      retries: 5
+      - BASKET_BIN=basket_balancer
+    restart: always
     networks:
       - basket_network
   basket_service:
@@ -25,34 +16,49 @@ services:
       dockerfile: docker/Dockerfile
       args:
         - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
+    environment:
         - BASKET_BIN=basket_service
     restart: always
     networks:
       - basket_network
-    # command: >
-    #   sh -c "cargo run --release --bin basket_service"
-    depends_on:
-      rabbit:
-        condition: service_healthy
   basket_request_generator:
     build:
       context: .
       dockerfile: docker/Dockerfile
       args:
         - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
-        - BASKET_BIN=basket_request_generator
+    environment:
+      - BASKET_BIN=basket_request_generator
     restart: always
     networks:
       - basket_network
-    # command: >
-    #   sh -c "cargo run --release --bin basket_request_generator"
     depends_on:
       basket_service:
         condition: service_started
-      rabbit:
-        condition: service_healthy
 
 networks:
   basket_network:
     driver: bridge
 
+
+
+  # rabbit:
+  #   image: rabbitmq:4
+  #   volumes:
+  #       - ./persistent_data/rabbitmq/conf:/etc/rabbitmq/
+  #       - ./persistent_data/rabbitmq/data/:/var/lib/rabbitmq/
+  #       - ./persistent_data/rabbitmq/logs/:/var/log/rabbitmq/
+  #   environment:
+  #       RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-secret_cookie}
+  #       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-admin}
+  #       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-admin}
+  #   ports:
+  #       - 5672:5672
+  #       - 15672:15672
+  #   healthcheck:
+  #     test: [ "CMD", "rabbitmqctl", "status"]
+  #     interval: 5s
+  #     timeout: 20s
+  #     retries: 5
+  #   networks:
+  #     - basket_network
