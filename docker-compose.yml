@@ -1,15 +1,4 @@
 services:
-  basket_balancer:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-      args:
-        - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
-    environment:
-      - BASKET_BIN=basket_balancer
-    restart: always
-    networks:
-      - basket_network
   basket_service:
     build:
       context: .
@@ -21,20 +10,19 @@ services:
     restart: always
     networks:
       - basket_network
-  basket_request_generator:
+  basket_balancer:
     build:
       context: .
       dockerfile: docker/Dockerfile
       args:
         - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
     environment:
-      - BASKET_BIN=basket_request_generator
+      - BASKET_BIN=basket_balancer
     restart: always
     networks:
       - basket_network
     depends_on:
-      basket_service:
-        condition: service_started
+      - basket_service
 
 networks:
   basket_network:

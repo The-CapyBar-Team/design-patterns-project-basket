@@ -1,37 +1,27 @@
-use std::{env, path::PathBuf};
+use std::env;
 
 fn main() {
-    let proto_dir_path = PathBuf::from(
-        env::var("BASKET_PROTO_DIRECTORY_PATH")
-            .expect("Missing BASKET_PROTO_DIRECTORY_PATH env variable"),
-    );
+    let proto_dir_path = env::var("BASKET_PROTO_DIRECTORY_PATH")
+        .expect("Missing BASKET_PROTO_DIRECTORY_PATH env variable");
 
-    // NOTE: use the paths relative to the include paths
     let proto_files = [
-        "add_to_queue_request.proto",
         "basket_service_requests/hp_request.proto",
         "basket_service_requests/ups_request.proto",
+        "basket_balancer_requests/cb_request.proto",
         "basket_service.proto",
+        "basket_balancer.proto",
     ];
 
-    let include_paths = [
-        proto_dir_path.clone(),
-        proto_dir_path.join("basket_service_requests"),
-    ];
+    let include = ["", "basket_service_requests", "basket_balancer_requests"]
+        .map(|include_dir| format!("{}/{}", proto_dir_path, include_dir));
 
-    // Watch for changes to proto files and dirs
-    for proto_file in &proto_files {
-        println!(
-            "cargo:rerun-if-changed={}",
-            proto_dir_path.join(proto_file).display()
-        );
-    }
+    let proto_paths = proto_files.map(|proto_file| format!("{}/{}", proto_dir_path, proto_file));
 
-    for include_path in &include_paths {
-        println!("cargo:rerun-if-changed={}", include_path.display());
+    for proto_path in &proto_paths {
+        println!("cargo:rerun-if-changed={}", proto_path);
     }
 
     tonic_build::configure()
-        .compile_protos(&proto_files, &include_paths)
+        .compile_protos(&proto_paths, &include)
         .expect("Failed to compile proto files");
 }

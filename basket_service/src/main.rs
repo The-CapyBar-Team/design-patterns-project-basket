@@ -9,7 +9,7 @@ mod callbacks;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let basket_context = BasketContext::new(Basket::new(|_, _, _| {}));
-    let addr = "[::1]:50051".parse()?;
+    let addr = "[::]:50051".parse()?;
 
     println!("Server listening on {}", addr);
 

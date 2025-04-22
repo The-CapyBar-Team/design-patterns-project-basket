@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package basket_balancer;
+
+import "basket_balancer_requests/cb_request.proto";
+
+service BasketBalancer {
+  rpc perform_cb (cb_request.Request) returns (cb_request.Response);
+}

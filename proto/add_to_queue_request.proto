@@ -1,8 +1,0 @@
-syntax = "proto3";
-
-package basket_communication;
-
-message Message {
-  string content = 1;
-  uint32 id = 2;
-}

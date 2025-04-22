@@ -356,9 +356,12 @@ checksum = "89e25b6adfb930f02d1981565a6e5d9c547ac15a96606256d3b59040e5cd4ca3"
 name = "basket_balancer"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "basket_communication",
  "rand",
  "thiserror",
+ "tokio",
+ "tonic",
 ]
 
 [[package]]
@@ -609,7 +612,6 @@ dependencies = [
  "anyhow",
  "basket_communication",
  "futures",
- "lapin",
  "prost",
  "thiserror",
  "tokio",
