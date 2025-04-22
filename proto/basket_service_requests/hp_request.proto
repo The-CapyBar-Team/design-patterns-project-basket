@@ -4,17 +4,18 @@ package hp_request;
 
 enum ProductStatus {
     PRODUCT_HELD_BY_USER = 0;
-    HOLDERS_QUEUE_ALREADY_FULL = 1;
-    PRODUCT_NOT_FOUND = 2;
-    PREMATURE_AWAIT = 3;
-    USER_ALREADY_ADDED = 4;
-    QUEUE_POSITION_IS_INCORRECT = 5;
+    PRODUCT_AWAITED_BY_USER = 1;
+    HOLDERS_QUEUE_ALREADY_FULL = 2;
+    PRODUCT_NOT_FOUND = 3;
+    PREMATURE_AWAIT = 4;
+    USER_ALREADY_ADDED = 5;
+    QUEUE_POSITION_IS_INCORRECT = 6;
 }
 
 message Request {
-  uint32 user_id = 1;
-  uint32 product_id = 2;
-  uint32 queue_position = 3;
+  uint32 user_id = 1;         // TODO: string
+  uint32 product_id = 2;      // TODO: int32
+  uint32 queue_position = 3;  // TODO: int32
 }
 
 message Response {

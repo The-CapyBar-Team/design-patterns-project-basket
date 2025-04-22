@@ -40,11 +40,20 @@ where
     }
 
     #[inline(always)]
+    pub(crate) fn is_ready(&self) -> bool {
+        self.basket_set.is_full()
+    }
+
+    #[inline(always)]
     pub(crate) async fn establish_new_channel(
         &mut self,
         basket_id: BasketId,
         uri: &str,
     ) -> Result<(), BasketPoolError> {
+        if basket_id >= MAX_BASKETS_COUNT {
+            return Err(BasketPoolError::InvalidBasketId(basket_id));
+        }
+
         if self.channels.len() as BasketId >= MAX_BASKETS_COUNT {
             eprintln!("ERROR: exceeding max baskets count");
             return Err(BasketPoolError::ConnectionPoolIsFull(basket_id));
@@ -93,7 +102,7 @@ where
     ) -> Result<Response<cb_request::Response>, Status> {
         let args = request.into_inner();
         println!("!!!!PERFORMING CB: ");
-        let basket_id = 3;
+        let basket_id = 0;
         let uri = format!("http://{}:{}", args.hostname, args.port);
 
         eprintln!("!!!!!URI URI URI: {}", uri);
@@ -104,9 +113,17 @@ where
             .await
             .map_err(|err| Status::new(Code::Internal, format!("{}", err)))?;
 
+        if basket_pool.is_ready() {
+            subscribe_to_rabbit_and_start_processing_messages();
+        }
+
         Ok(Response::new(cb_request::Response {
             error_message: "Successfuly connected".to_owned(),
             status: cb_request::ConnectionStatus::ConnectionSuccess.into(),
         }))
     }
+}
+
+fn subscribe_to_rabbit_and_start_processing_messages() {
+    println!("Subscribing to rabbit and starting to handle requests.");
 }

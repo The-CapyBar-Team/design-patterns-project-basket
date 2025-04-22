@@ -18,6 +18,7 @@ impl VecBalancingSet {
 }
 
 impl BasketSet for VecBalancingSet {
+    #[inline(always)]
     fn add_basket_id(&mut self, basket_id: BasketId) {
         if basket_id >= MAX_BASKETS_COUNT {
             return;
@@ -28,6 +29,7 @@ impl BasketSet for VecBalancingSet {
         }
     }
 
+    #[inline(always)]
     fn remove_basket_id(&mut self, basket_id: BasketId) {
         if let Some(position) = self
             .available_baskets
@@ -38,16 +40,25 @@ impl BasketSet for VecBalancingSet {
         }
     }
 
+    #[inline(always)]
     fn is_empty(&self) -> bool {
         self.available_baskets.is_empty()
     }
 
+    #[inline(always)]
+    fn is_full(&self) -> bool {
+        println!("CURRENT_LEN = {}", self.available_baskets.len());
+        self.available_baskets.len() >= MAX_BASKETS_COUNT.into()
+    }
+
+    #[inline(always)]
     fn dump(&self) -> String {
         format!("{:?}", self.available_baskets)
     }
 }
 
 impl BasketBalancer for VecBalancingSet {
+    #[inline(always)]
     fn choose_next_basket(&self) -> Option<BasketId> {
         use rand::Rng;
 
@@ -59,6 +70,7 @@ impl BasketBalancer for VecBalancingSet {
         }
     }
 
+    #[inline(always)]
     fn intersect(&mut self, other: &Self) {
         self.available_baskets
             .retain(|&basket_id| other.contains(basket_id));
