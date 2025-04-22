@@ -1,21 +1,19 @@
-use std::error::Error;
-
-use super::ChannelId;
 use crate::types::BasketId;
 use basket_communication::basket_balancer::cb_request;
 use basket_communication::types::{ProductId, UserId};
+use std::error::Error;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub(crate) enum BasketPoolError {
     #[error("Unable to establish channel (connection) with id {0}: connection pool is full")]
-    ConnectionPoolIsFull(ChannelId),
+    ConnectionPoolIsFull(BasketId),
 
     #[error("Channel (connection) with id '`{0}`' is already established")]
-    AlreadyConnected(ChannelId),
+    AlreadyConnected(BasketId),
 
     #[error("Unable to establish channel (connection) with id {0}: {1}")]
-    InternalError(ChannelId, Box<dyn Error>),
+    InternalError(BasketId, Box<dyn Error>),
 }
 
 #[inline(always)]

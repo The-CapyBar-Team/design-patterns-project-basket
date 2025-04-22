@@ -25,6 +25,11 @@ where
     BasketSet: BasketSetBounds,
 {
     #[inline(always)]
+    pub(crate) fn actual_basket_set(&self) -> &BasketSet {
+        &self.basket_set
+    }
+
+    #[inline(always)]
     pub(crate) async fn establish_new_channel(
         &mut self,
         basket_id: BasketId,

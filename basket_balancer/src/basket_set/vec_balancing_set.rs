@@ -37,6 +37,10 @@ impl BasketSet for VecBalancingSet {
             self.available_baskets.swap_remove(position);
         }
     }
+
+    fn is_empty(&self) -> bool {
+        self.available_baskets.is_empty()
+    }
 }
 
 impl BasketBalancer for VecBalancingSet {

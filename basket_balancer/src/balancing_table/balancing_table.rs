@@ -7,6 +7,7 @@ use basket_communication::basket_service::hp_request::{
 };
 use basket_communication::basket_service::ups_request::Request as ups_request;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 const NUMBER_OF_BASKETS: BasketId = 4;
@@ -33,7 +34,7 @@ where
     RequestSender: Default + requests::RequestSender,
     BasketBalancer: BasketBalancerBounds,
 {
-    products_to_balancing_info: HashMap<ProductId, ProductBalancingInfo<BasketBalancer>>, // TODO: think of using Vec instead of HashMap as a map
+    products_to_balancing_info: RefCell<HashMap<ProductId, ProductBalancingInfo<BasketBalancer>>>, // TODO: think of using Vec instead of HashMap as a map
     request_sender: RequestSender,
     basket_pool: &'l BasketPool<BasketBalancer>,
 }
@@ -73,10 +74,14 @@ where
             basket_balancer
         };
 
-        if let Some(balancing_info) = self.products_to_balancing_info.get_mut(&product_id) {
+        if let Some(balancing_info) = self
+            .products_to_balancing_info
+            .borrow_mut()
+            .get_mut(&product_id)
+        {
             balancing_info.basket_balancer = basket_balancer;
         } else {
-            let replaced_balancing_info = self.products_to_balancing_info.insert(
+            let replaced_balancing_info = self.products_to_balancing_info.borrow_mut().insert(
                 product_id,
                 ProductBalancingInfo {
                     basket_balancer,
@@ -88,43 +93,55 @@ where
         }
     }
 
-    // #[inline(always)]
-    // pub(crate) fn add_product_to_basket(
-    //     &mut self,
-    //     product_id: ProductId,
-    //     user_id: UserId,
-    // ) -> Result<(), BalancerError> {
-    //     let balancing_info = self
-    //         .products_to_balancing_info
-    //         .get_mut(&product_id)
-    //         .ok_or(BalancerError::ProductNotFound(product_id, user_id))?;
+    #[inline(always)]
+    pub(crate) fn add_product_to_basket(
+        &mut self,
+        product_id: ProductId,
+        user_id: UserId,
+    ) -> Result<(), BalancerError> {
+        let mut binding = self.products_to_balancing_info.borrow_mut();
+        let balancing_info = binding
+            .get_mut(&product_id)
+            .ok_or(BalancerError::ProductNotFound(product_id, user_id))?;
 
-    //     while let Some(next_basket_id) = choose_next_basket(&balancing_info.available_baskets) {
-    //         if self
-    //             .request_sender
-    //             .perform_hp_request(next_basket_id, product_id, user_id)
-    //         {
-    //             break;
-    //         }
+        while let Some(next_basket_id) = {
+            self.synchronize_with_global_basket_set(balancing_info);
+            balancing_info.basket_balancer.choose_next_basket()
+        } {
+            if self
+                .request_sender
+                .perform_hp_request(next_basket_id, product_id, user_id)
+            {
+                break;
+            }
 
-    //         if let Some(bad_service) = balancing_info
-    //             .available_baskets
-    //             .iter()
-    //             .position(|basket_id| *basket_id == next_basket_id)
-    //         {
-    //             balancing_info.available_baskets.remove(bad_service);
-    //         }
-    //     }
+            balancing_info
+                .basket_balancer
+                .remove_basket_id(next_basket_id);
+        }
 
-    //     if balancing_info.available_baskets.is_empty() {
-    //         let next_basket_id =
-    //             choose_next_basket(&all_baskets()).expect("We must have at least one basket");
-    //         self.request_sender
-    //             .perform_ap_request(next_basket_id, product_id, user_id);
-    //     }
+        if balancing_info.basket_balancer.is_empty() {
+            let next_basket_id = self
+                .basket_pool
+                .actual_basket_set()
+                .choose_next_basket()
+                .expect("We must have at least one basket");
+            self.request_sender
+                .perform_ap_request(next_basket_id, product_id, user_id);
+        }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn synchronize_with_global_basket_set(
+        &self,
+        balancing_info: &mut ProductBalancingInfo<BasketBalancer>,
+    ) {
+        balancing_info
+            .basket_balancer
+            .intersect(&self.basket_pool.actual_basket_set());
+    }
 }
 
 // TODO: use SmallVec here
@@ -155,11 +172,6 @@ fn choose_next_basket(available_baskets: &[BasketId]) -> Option<BasketId> {
         let mut rng = rand::thread_rng();
         Some(rng.gen_range(0..available_baskets.len()) as u8)
     }
-}
-
-#[inline(always)]
-fn all_baskets() -> [BasketId; NUMBER_OF_BASKETS as usize] {
-    std::array::from_fn(|id| id as BasketId)
 }
 
 #[cfg(test)]
