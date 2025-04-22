@@ -41,6 +41,10 @@ impl BasketSet for VecBalancingSet {
     fn is_empty(&self) -> bool {
         self.available_baskets.is_empty()
     }
+
+    fn dump(&self) -> String {
+        format!("{:?}", self.available_baskets)
+    }
 }
 
 impl BasketBalancer for VecBalancingSet {

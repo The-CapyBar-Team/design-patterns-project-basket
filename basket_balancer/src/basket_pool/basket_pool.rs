@@ -1,11 +1,12 @@
 use super::error::BasketPoolError;
+use crate::basket_pool::error::basket_pool_error_to_status;
 use crate::basket_set::MAX_BASKETS_COUNT;
 use crate::types::BasketId;
 use basket_communication::basket_balancer::{basket_balancer_server, cb_request};
 use basket_communication::basket_service::basket_service_client::BasketServiceClient;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 use tonic::transport::Channel;
-use tonic::{Request, Response, Status};
+use tonic::{Code, Request, Response, Status};
 
 // pub(crate) trait BasketSerBounds: Default + crate::basket_set::traits::BasketSet
 // // + std::marker::Sync + std::marker::Send + 'static
@@ -45,6 +46,7 @@ where
         uri: &str,
     ) -> Result<(), BasketPoolError> {
         if self.channels.len() as BasketId >= MAX_BASKETS_COUNT {
+            eprintln!("ERROR: exceeding max baskets count");
             return Err(BasketPoolError::ConnectionPoolIsFull(basket_id));
         }
 
@@ -54,6 +56,7 @@ where
             .find(|(found_channel_id, _)| *found_channel_id == basket_id)
             .is_some()
         {
+            eprintln!("ERROR: Already connected!");
             return Err(BasketPoolError::AlreadyConnected(basket_id));
         }
 
@@ -61,11 +64,18 @@ where
             BasketServiceClient::connect(uri.to_owned())
                 .await
                 .map_err(|internal_error| {
+                    eprintln!("ERROR: INTERNAL: {}", internal_error);
                     BasketPoolError::InternalError(basket_id, Box::new(internal_error))
                 })?;
 
         self.channels.push((basket_id, channel));
         self.basket_set.add_basket_id(basket_id);
+
+        eprintln!(
+            "SUCCESS: channels_count = {}, basket_set = {}",
+            self.channels.len(),
+            self.basket_set.dump()
+        );
 
         Ok(())
     }
@@ -81,6 +91,22 @@ where
         &self,
         request: Request<cb_request::Request>,
     ) -> Result<Response<cb_request::Response>, Status> {
-        todo!()
+        let args = request.into_inner();
+        println!("!!!!PERFORMING CB: ");
+        let basket_id = 3;
+        let uri = format!("http://{}:{}", args.hostname, args.port);
+
+        eprintln!("!!!!!URI URI URI: {}", uri);
+
+        let mut basket_pool = self.basket_pool.lock().await;
+        basket_pool
+            .establish_new_channel(basket_id, &uri)
+            .await
+            .map_err(|err| Status::new(Code::Internal, format!("{}", err)))?;
+
+        Ok(Response::new(cb_request::Response {
+            error_message: "Successfuly connected".to_owned(),
+            status: cb_request::ConnectionStatus::ConnectionSuccess.into(),
+        }))
     }
 }

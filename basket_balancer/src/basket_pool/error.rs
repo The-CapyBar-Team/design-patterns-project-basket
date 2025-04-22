@@ -17,9 +17,7 @@ pub(crate) enum BasketPoolError {
 }
 
 #[inline(always)]
-pub(crate) fn add_product_holder_error_to_status(
-    error: BasketPoolError,
-) -> cb_request::ConnectionStatus {
+pub(crate) fn basket_pool_error_to_status(error: BasketPoolError) -> cb_request::ConnectionStatus {
     use cb_request::ConnectionStatus as ProtoStatus;
 
     match error {

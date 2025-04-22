@@ -4,6 +4,7 @@ pub(crate) trait BasketSet {
     fn add_basket_id(&mut self, basket_id: BasketId);
     fn remove_basket_id(&mut self, basket_id: BasketId);
     fn is_empty(&self) -> bool;
+    fn dump(&self) -> String;
 }
 
 pub(crate) trait BasketBalancer {
