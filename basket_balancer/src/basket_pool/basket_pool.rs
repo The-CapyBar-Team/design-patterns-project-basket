@@ -3,26 +3,35 @@ use crate::basket_set::MAX_BASKETS_COUNT;
 use crate::types::BasketId;
 use basket_communication::basket_balancer::{basket_balancer_server, cb_request};
 use basket_communication::basket_service::basket_service_client::BasketServiceClient;
+use std::sync::Mutex;
 use tonic::transport::Channel;
 use tonic::{Request, Response, Status};
 
-pub(crate) trait BasketSetBounds:
-    Default + crate::basket_set::traits::BasketSet + std::marker::Sync + std::marker::Send + 'static
-{
-}
+// pub(crate) trait BasketSerBounds: Default + crate::basket_set::traits::BasketSet
+// // + std::marker::Sync + std::marker::Send + 'static
+// {
+// }
 
 #[derive(Default)]
 pub(crate) struct BasketPool<BasketSet>
 where
-    BasketSet: BasketSetBounds,
+    BasketSet: Default + crate::basket_set::traits::BasketSet,
 {
     basket_set: BasketSet,
     channels: Vec<(BasketId, BasketServiceClient<Channel>)>,
 }
 
+#[derive(Default)]
+pub(crate) struct ProtectedBasketPool<BasketSet>
+where
+    BasketSet: Default + crate::basket_set::traits::BasketSet,
+{
+    basket_pool: Mutex<BasketPool<BasketSet>>,
+}
+
 impl<BasketSet> BasketPool<BasketSet>
 where
-    BasketSet: BasketSetBounds,
+    BasketSet: Default + crate::basket_set::traits::BasketSet,
 {
     #[inline(always)]
     pub(crate) fn actual_basket_set(&self) -> &BasketSet {
@@ -63,9 +72,9 @@ where
 }
 
 #[tonic::async_trait]
-impl<BasketSet> basket_balancer_server::BasketBalancer for BasketPool<BasketSet>
+impl<BasketSet> basket_balancer_server::BasketBalancer for ProtectedBasketPool<BasketSet>
 where
-    BasketSet: BasketSetBounds,
+    BasketSet: Default + crate::basket_set::traits::BasketSet + Send + Sync + 'static,
 {
     #[inline(always)]
     async fn perform_cb(

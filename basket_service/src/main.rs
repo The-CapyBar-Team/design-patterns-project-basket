@@ -1,5 +1,5 @@
 use basket::Basket;
-use basket_communication::basket_service::basket_service_server::BasketServiceServer; //ups_request::ups_service_server::UpsServiceServer;
+use basket_communication::basket_service::basket_service_server::BasketServiceServer;
 use callbacks::*;
 use tonic::transport::Server;
 

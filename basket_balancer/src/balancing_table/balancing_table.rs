@@ -1,5 +1,5 @@
 use super::error::BalancerError;
-use crate::basket_pool::basket_pool::{BasketPool, BasketSetBounds};
+use crate::basket_pool::basket_pool::BasketPool;
 use crate::requests;
 use crate::types::BasketId;
 use basket_communication::basket_service::hp_request::{
@@ -12,18 +12,11 @@ use std::collections::HashMap;
 
 const NUMBER_OF_BASKETS: BasketId = 4;
 
-trait BasketBalancerBounds:
-    Default
-    + crate::basket_set::traits::BasketSet
-    + crate::basket_set::traits::BasketBalancer
-    + BasketSetBounds
-{
-}
-
 #[derive(Default)]
 struct ProductBalancingInfo<BasketBalancer>
 where
-    BasketBalancer: BasketBalancerBounds,
+    BasketBalancer:
+        Default + crate::basket_set::traits::BasketSet + crate::basket_set::traits::BasketBalancer,
 {
     basket_balancer: BasketBalancer,
     queue_size: QueuePosition,
@@ -32,7 +25,8 @@ where
 pub(crate) struct BalancingTable<'l, RequestSender, BasketBalancer>
 where
     RequestSender: Default + requests::RequestSender,
-    BasketBalancer: BasketBalancerBounds,
+    BasketBalancer:
+        Default + crate::basket_set::traits::BasketSet + crate::basket_set::traits::BasketBalancer,
 {
     products_to_balancing_info: RefCell<HashMap<ProductId, ProductBalancingInfo<BasketBalancer>>>, // TODO: think of using Vec instead of HashMap as a map
     request_sender: RequestSender,
@@ -42,7 +36,8 @@ where
 impl<'l, RequestSender, BasketBalancer> BalancingTable<'l, RequestSender, BasketBalancer>
 where
     RequestSender: Default + requests::RequestSender,
-    BasketBalancer: BasketBalancerBounds,
+    BasketBalancer:
+        Default + crate::basket_set::traits::BasketSet + crate::basket_set::traits::BasketBalancer,
 {
     #[inline(always)]
     pub(crate) fn new(basket_pool: &'l BasketPool<BasketBalancer>) -> Self {
