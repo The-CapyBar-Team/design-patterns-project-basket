@@ -2,25 +2,40 @@ syntax = "proto3";
 
 package hp_request;
 
-enum ProductStatus {
+enum SuccessStatus {
     PRODUCT_HELD_BY_USER = 0;
     PRODUCT_AWAITED_BY_USER = 1;
-    HOLDERS_QUEUE_ALREADY_FULL = 2;
-    PRODUCT_NOT_FOUND = 3;
-    PREMATURE_AWAIT = 4;
-    USER_ALREADY_ADDED = 5;
-    QUEUE_POSITION_IS_INCORRECT = 6;
+}
+
+enum FailureStatus {
+    HOLDERS_QUEUE_ALREADY_FULL = 0;
+    PRODUCT_NOT_FOUND = 1;
+    PREMATURE_AWAIT = 2;
+    USER_ALREADY_ADDED = 3;
+    QUEUE_POSITION_IS_INCORRECT = 4;
 }
 
 message Request {
-  uint32 user_id = 1;         // TODO: string
-  uint32 product_id = 2;      // TODO: int32
-  uint32 queue_position = 3;  // TODO: int32
+  string user_id = 1;                  // TODO: string
+  int32 product_id = 2;                // TODO: int32
+  optional uint32 queue_position = 3;  // TODO: int32
 }
 
 message Response {
+  oneof response {
+    Success success = 1;
+    Failure failure = 2;
+  }
+}
+
+message Success {
   uint32 user_id = 1;
   uint32 product_id = 2;
   uint32 queue_position = 3;
-  ProductStatus status = 4;
+  SuccessStatus status = 4;
+}
+
+message Failure {
+  string error_message = 1;
+  FailureStatus status = 2;
 }

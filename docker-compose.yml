@@ -6,20 +6,87 @@ services:
       dockerfile: docker/Dockerfile
       args:
         - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
+    env_file:
+      - .env
     environment:
       - BASKET_BIN=basket_balancer
     restart: always
     networks:
       - basket_network
-  basket_service:
-    container_name: basket_service
+  basket_service0:
+    container_name: basket_service-0
     build:
       context: .
       dockerfile: docker/Dockerfile
       args:
         - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
+    env_file:
+      - .env
     environment:
         - BASKET_BIN=basket_service
+        - BASKET_SERVICE_URI=http://basket_service-0:${BASKET_SERVICE_PORT}
+        - BASKET_BALANCER_URI=http://basket_balancer:${BASKET_BALANCER_PORT}
+        - BASKET_ID=0
+    restart: always
+    networks:
+      - basket_network
+    depends_on:
+      - basket_balancer
+
+  basket_service1:
+    container_name: basket_service-1
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
+    env_file:
+      - .env
+    environment:
+        - BASKET_BIN=basket_service
+        - BASKET_SERVICE_URI=http://basket_service-1:${BASKET_SERVICE_PORT}
+        - BASKET_BALANCER_URI=http://basket_balancer:${BASKET_BALANCER_PORT}
+        - BASKET_ID=1
+    restart: always
+    networks:
+      - basket_network
+    depends_on:
+      - basket_balancer
+
+  basket_service2:
+    container_name: basket_service-2
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
+    env_file:
+      - .env
+    environment:
+        - BASKET_BIN=basket_service
+        - BASKET_SERVICE_URI=http://basket_service-2:${BASKET_SERVICE_PORT}
+        - BASKET_BALANCER_URI=http://basket_balancer:${BASKET_BALANCER_PORT}
+        - BASKET_ID=2
+    restart: always
+    networks:
+      - basket_network
+    depends_on:
+      - basket_balancer
+
+  basket_service3:
+    container_name: basket_service-3
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        - BASKET_PROTO_DIRECTORY_PATH=${BASKET_PROTO_DIRECTORY_PATH}
+    env_file:
+      - .env
+    environment:
+        - BASKET_BIN=basket_service
+        - BASKET_SERVICE_URI=http://basket_service-3:${BASKET_SERVICE_PORT}
+        - BASKET_BALANCER_URI=http://basket_balancer:${BASKET_BALANCER_PORT}
+        - BASKET_ID=3
     restart: always
     networks:
       - basket_network

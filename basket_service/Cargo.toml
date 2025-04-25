@@ -15,6 +15,7 @@ tokio = { version = "1.44.2", features = ["full"] }
 prost = "0.13.5"
 thiserror = "2.0.12"
 tonic = "0.13.0"
+num = "0.4.3"
 
 [features]
 default = ["extra_protection"]

@@ -11,11 +11,11 @@ enum ConnectionStatus {
 }
 
 message Request {
-  string hostname = 1;
-  uint32 port = 2;
+  string uri = 1;
+  uint32 basket_id = 2;
 }
 
 message Response {
-  string error_message = 1;
+  optional string error_message = 1;
   ConnectionStatus status = 2;
 }

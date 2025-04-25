@@ -118,15 +118,15 @@ impl BasketContext {
     // }
 }
 
-#[inline(always)]
-fn add_product_holder_error_to_status(error: BasketError) -> hp_request::ProductStatus {
-    use hp_request::ProductStatus as ProtoStatus;
+// #[inline(always)]
+// fn add_product_holder_error_to_status(error: BasketError) -> hp_request::ProductStatus {
+//     use hp_request::ProductStatus as ProtoStatus;
 
-    match error {
-        BasketError::ProductNotFound(_, _) => ProtoStatus::ProductNotFound,
-        BasketError::HoldersQueueAlreadyFull(_, _) => ProtoStatus::HoldersQueueAlreadyFull,
-        BasketError::PrematureAwait(_, _) => ProtoStatus::PrematureAwait,
-        BasketError::UserAlreadyAdded(_, _) => ProtoStatus::UserAlreadyAdded,
-        BasketError::QueuePositionIsIncorrect(_, _, _) => ProtoStatus::QueuePositionIsIncorrect,
-    }
-}
+//     match error {
+//         BasketError::ProductNotFound(_, _) => ProtoStatus::ProductNotFound,
+//         BasketError::HoldersQueueAlreadyFull(_, _) => ProtoStatus::HoldersQueueAlreadyFull,
+//         BasketError::PrematureAwait(_, _) => ProtoStatus::PrematureAwait,
+//         BasketError::UserAlreadyAdded(_, _) => ProtoStatus::UserAlreadyAdded,
+//         BasketError::QueuePositionIsIncorrect(_, _, _) => ProtoStatus::QueuePositionIsIncorrect,
+//     }
+// }
