@@ -3,7 +3,9 @@ syntax = "proto3";
 package basket_service;
 
 import "basket_service_requests/ups_request.proto";
+import "basket_service_requests/hp_request.proto";
 
 service BasketService {
   rpc perform_ups (ups_request.Request) returns (ups_request.Response);
+  rpc perform_hp (hp_request.Request) returns (hp_request.Response);
 }

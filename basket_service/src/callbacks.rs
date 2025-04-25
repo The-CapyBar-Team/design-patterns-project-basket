@@ -15,15 +15,51 @@ impl basket_service_server::BasketService for BasketContext {
         &self,
         request: Request<ups_request::Request>,
     ) -> Result<Response<ups_request::Response>, Status> {
-        let args = request.into_inner();
-        println!(
-            "basket_service | stock updated for product: product_id={} new_stock={}",
-            args.product_id, args.product_stock
-        );
-        let mut basket = self.basket.lock().unwrap();
-        basket.update_product_stock(args.product_id, args.product_stock);
+        // let args = request.into_inner();
+        // println!(
+        //     "basket_service | stock updated for product: product_id={} new_stock={}",
+        //     args.product_id, args.product_stock
+        // );
+        // let mut basket = self.basket.lock().unwrap();
+        // basket.update_product_stock(args.product_id, args.product_stock);
 
-        Ok(Response::new(ups_request::Response { ok: 1 }))
+        // Ok(Response::new(ups_request::Response { ok: 1 }))
+        todo!()
+    }
+
+    // TODO: What if user_id is not identical and one user can do hp twice? he would be able to
+    #[inline(always)]
+    async fn perform_hp(
+        &self,
+        request: Request<hp_request::Request>,
+    ) -> Result<Response<hp_request::Response>, Status> {
+        use hp_request::response::Response::Failure;
+        use hp_request::response::Response::Success;
+
+        let hp_request::Request {
+            user_id,
+            product_id,
+        } = request.into_inner();
+
+        println!("HP | user_id: {}, product_id: {}", user_id, product_id);
+
+        let response = hp_request::Response {
+            response: Some(Success(hp_request::Success {
+                user_id: 121,
+                product_id: 122,
+                queue_position: 123,
+                status: hp_request::SuccessStatus::ProductHeldByUser as i32,
+            })),
+        };
+
+        Ok(Response::new(response))
+
+        // let failure_response = hp_request::Response {
+        //     response: Some(Failure(hp_request::Failure {
+        //         error_message: todo!(),
+        //         status: todo!(),
+        //     })),
+        // };
     }
 }
 

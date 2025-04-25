@@ -2,6 +2,7 @@ use super::error::BalancerError;
 use crate::basket_pool::basket_pool::BasketPool;
 use crate::requests;
 use crate::types::BasketId;
+use basket_communication::basket_service::hp_request;
 use basket_communication::basket_service::hp_request::{
     Request as hp_or_ap_request, Response as hp_or_ap_response,
 };
@@ -97,16 +98,19 @@ where
         let mut binding = self.products_to_balancing_info.borrow_mut();
         let balancing_info = binding
             .get_mut(&product_id)
-            .ok_or(BalancerError::ProductNotFound(product_id, user_id))?;
+            .ok_or(BalancerError::ProductNotFound(product_id, user_id.clone()))?;
 
         while let Some(next_basket_id) = {
             self.synchronize_with_global_basket_set(balancing_info);
             balancing_info.basket_balancer.choose_next_basket()
         } {
-            if self
-                .request_sender
-                .perform_hp_request(next_basket_id, product_id, user_id)
-            {
+            if self.request_sender.perform_hp_request(
+                next_basket_id,
+                hp_request::Request {
+                    user_id: user_id.clone(),
+                    product_id,
+                },
+            ) {
                 break;
             }
 

@@ -4,7 +4,7 @@ use thiserror::Error;
 
 // TODO: think of replacing VecDeque with HashMap
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone)]
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 struct UserInfo {
     user_id: UserId,
@@ -98,12 +98,12 @@ impl Basket {
         let product_context = self
             .product_to_context
             .get_mut(&product_id)
-            .ok_or(BasketError::ProductNotFound(product_id, holder_id))?;
+            .ok_or(BasketError::ProductNotFound(product_id, holder_id.clone()))?;
 
         if product_context
             .product_holders
             .iter()
-            .any(|&existent_holder_info| existent_holder_info.user_id == holder_id)
+            .any(|existent_holder_info| existent_holder_info.user_id == holder_id)
         {
             return Err(BasketError::UserAlreadyAdded(product_id, holder_id));
         }
@@ -139,13 +139,13 @@ impl Basket {
         let product_context = self
             .product_to_context
             .get_mut(&product_id)
-            .ok_or(BasketError::ProductNotFound(product_id, awaiter_id))?;
+            .ok_or(BasketError::ProductNotFound(product_id, awaiter_id.clone()))?;
 
         if product_context
             .product_holders
             .iter()
             .chain(product_context.product_awaiters.iter())
-            .any(|&existent_user_info| existent_user_info.user_id == awaiter_id)
+            .any(|existent_user_info| existent_user_info.user_id == awaiter_id)
         {
             return Err(BasketError::UserAlreadyAdded(product_id, awaiter_id));
         }
@@ -184,7 +184,7 @@ impl Basket {
         let product_context = self
             .product_to_context
             .get_mut(&product_id)
-            .ok_or(BasketError::ProductNotFound(product_id, user_id))?;
+            .ok_or(BasketError::ProductNotFound(product_id, user_id.clone()))?;
 
         if let Some(found_index) = product_context
             .product_holders
@@ -199,7 +199,7 @@ impl Basket {
 
         let new_holder = Self::fill_available_holder_slots(product_context);
         debug_assert!(new_holder.len() == 1);
-        Ok(*new_holder.first().unwrap())
+        Ok(new_holder.first().unwrap().clone())
     }
 
     // TODO: we could optimize this by providing the function that returns a single element
@@ -219,7 +219,7 @@ impl Basket {
                 .product_awaiters
                 .pop_front()
                 .map(|new_holder| {
-                    new_holders_ids.push(new_holder.user_id);
+                    new_holders_ids.push(new_holder.user_id.clone());
                     product_context.product_holders.push_back(new_holder);
                 });
         }
@@ -259,7 +259,7 @@ impl Basket {
             .product_holders
             .iter()
             .chain(product_context.product_awaiters.iter())
-            .any(|&existent_user_info| existent_user_info.queue_position == queue_position)
+            .any(|existent_user_info| existent_user_info.queue_position == queue_position)
     }
 }
 
