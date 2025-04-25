@@ -1,5 +1,5 @@
 use super::error::BalancerError;
-use crate::basket_pool::basket_pool::BasketPool;
+use crate::basket_pool::basket_pool::ProtectedBasketPool;
 use crate::requests;
 use crate::types::BasketId;
 use basket_communication::basket_service::hp_request;
@@ -10,6 +10,8 @@ use basket_communication::basket_service::ups_request::Request as ups_request;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 const NUMBER_OF_BASKETS: BasketId = 4;
 
@@ -23,41 +25,48 @@ where
     queue_size: QueuePosition,
 }
 
-pub(crate) struct BalancingTable<'l, RequestSender, BasketBalancer>
+pub(crate) struct BalancingTable<RequestSender, BasketBalancer>
 where
-    RequestSender: Default + requests::RequestSender,
+    RequestSender: requests::RequestSender,
     BasketBalancer:
         Default + crate::basket_set::traits::BasketSet + crate::basket_set::traits::BasketBalancer,
 {
-    products_to_balancing_info: RefCell<HashMap<ProductId, ProductBalancingInfo<BasketBalancer>>>, // TODO: think of using Vec instead of HashMap as a map
-    request_sender: RequestSender,
-    basket_pool: &'l BasketPool<BasketBalancer>,
+    products_to_balancing_info: Mutex<HashMap<ProductId, ProductBalancingInfo<BasketBalancer>>>, // TODO: think of using Vec instead of HashMap as a map
+    request_sender: Arc<Mutex<RequestSender>>,
+    basket_pool: Arc<ProtectedBasketPool<BasketBalancer>>,
 }
 
-impl<'l, RequestSender, BasketBalancer> BalancingTable<'l, RequestSender, BasketBalancer>
+impl<'l, RequestSender, BasketBalancer> BalancingTable<RequestSender, BasketBalancer>
 where
-    RequestSender: Default + requests::RequestSender,
+    RequestSender: requests::RequestSender,
     BasketBalancer:
         Default + crate::basket_set::traits::BasketSet + crate::basket_set::traits::BasketBalancer,
 {
     #[inline(always)]
-    pub(crate) fn new(basket_pool: &'l BasketPool<BasketBalancer>) -> Self {
+    pub(crate) fn new(
+        request_sender: Arc<Mutex<RequestSender>>,
+        basket_pool: Arc<ProtectedBasketPool<BasketBalancer>>,
+    ) -> Self {
         Self {
             products_to_balancing_info: Default::default(),
-            request_sender: Default::default(),
+            request_sender,
             basket_pool,
         }
     }
 
     // TODO: implement resilience strategy in case of some baskets getting dead
     #[inline(always)]
-    pub(crate) fn update_product_stock(&mut self, product_id: ProductId, stock: ProductStock) {
+    pub(crate) async fn update_product_stock(
+        &mut self,
+        product_id: ProductId,
+        stock: ProductStock,
+    ) {
         let stock_distribution = distribute_stock(stock);
         let basket_balancer = {
             let mut basket_balancer = BasketBalancer::default();
 
             for (basket_id, stock_piece) in (0..NUMBER_OF_BASKETS).zip(stock_distribution) {
-                self.request_sender.perform_ups_request(
+                self.request_sender.lock().await.perform_ups_request(
                     basket_id,
                     ups_request {
                         product_id,
@@ -72,12 +81,13 @@ where
 
         if let Some(balancing_info) = self
             .products_to_balancing_info
-            .borrow_mut()
+            .lock()
+            .await
             .get_mut(&product_id)
         {
             balancing_info.basket_balancer = basket_balancer;
         } else {
-            let replaced_balancing_info = self.products_to_balancing_info.borrow_mut().insert(
+            let replaced_balancing_info = self.products_to_balancing_info.lock().await.insert(
                 product_id,
                 ProductBalancingInfo {
                     basket_balancer,
@@ -90,56 +100,94 @@ where
     }
 
     #[inline(always)]
-    pub(crate) fn add_product_to_basket(
+    pub(crate) async fn add_product_to_basket(
         &mut self,
         product_id: ProductId,
         user_id: UserId,
     ) -> Result<(), BalancerError> {
-        let mut binding = self.products_to_balancing_info.borrow_mut();
+        println!("hp_request | begining");
+
+        let mut binding = self.products_to_balancing_info.lock().await;
         let balancing_info = binding
             .get_mut(&product_id)
             .ok_or(BalancerError::ProductNotFound(product_id, user_id.clone()))?;
 
+        println!("hp_request | retrieved balancing info");
+
         while let Some(next_basket_id) = {
-            self.synchronize_with_global_basket_set(balancing_info);
+            self.synchronize_with_global_basket_set(balancing_info)
+                .await;
             balancing_info.basket_balancer.choose_next_basket()
         } {
-            if self.request_sender.perform_hp_request(
-                next_basket_id,
-                hp_request::Request {
-                    user_id: user_id.clone(),
-                    product_id,
-                },
-            ) {
+            println!("hp_request | next_basket_chosen: {}", next_basket_id);
+
+            if let Some(()) = self
+                .request_sender
+                .lock()
+                .await
+                .perform_hp_request(
+                    next_basket_id,
+                    hp_request::Request {
+                        user_id: user_id.clone(),
+                        product_id,
+                    },
+                )
+                .await
+            {
+                println!("hp_request | hp request sent successfully");
                 break;
             }
+
+            println!("hp_request | hp request returned false");
 
             balancing_info
                 .basket_balancer
                 .remove_basket_id(next_basket_id);
+
+            println!(
+                "hp_request | removed basket id {} from the balancing info",
+                next_basket_id
+            );
         }
 
         if balancing_info.basket_balancer.is_empty() {
             let next_basket_id = self
                 .basket_pool
+                .basket_pool
+                .lock()
+                .await
                 .actual_basket_set()
                 .choose_next_basket()
                 .expect("We must have at least one basket");
-            self.request_sender
-                .perform_ap_request(next_basket_id, product_id, user_id);
+
+            println!("hp_request | chose next basket for ap request");
+
+            self.request_sender.lock().await.perform_ap_request(
+                next_basket_id,
+                product_id,
+                user_id,
+            );
+
+            println!("hp_request | performed ap request");
         }
 
         Ok(())
     }
 
     #[inline(always)]
-    fn synchronize_with_global_basket_set(
+    async fn synchronize_with_global_basket_set(
         &self,
         balancing_info: &mut ProductBalancingInfo<BasketBalancer>,
     ) {
-        balancing_info
-            .basket_balancer
-            .intersect(&self.basket_pool.actual_basket_set());
+        println!("hp_request | synchronized with global basket set");
+        balancing_info.basket_balancer.intersect(
+            &self
+                .basket_pool
+                .basket_pool
+                .lock()
+                .await
+                .actual_basket_set(),
+        );
     }
 }
 

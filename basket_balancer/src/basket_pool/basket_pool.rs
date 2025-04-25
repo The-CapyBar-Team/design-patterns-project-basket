@@ -4,6 +4,8 @@ use crate::basket_set::MAX_BASKETS_COUNT;
 use crate::types::BasketId;
 use basket_communication::basket_balancer::{basket_balancer_server, cb_request};
 use basket_communication::basket_service::basket_service_client::BasketServiceClient;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
 use tonic::transport::Channel;
 use tonic::{Code, Request, Response, Status};
@@ -27,7 +29,7 @@ pub(crate) struct ProtectedBasketPool<BasketSet>
 where
     BasketSet: Default + crate::basket_set::traits::BasketSet,
 {
-    basket_pool: Mutex<BasketPool<BasketSet>>,
+    pub basket_pool: Mutex<BasketPool<BasketSet>>,
 }
 
 impl<BasketSet> BasketPool<BasketSet>
@@ -79,10 +81,38 @@ where
 
         Ok(())
     }
+
+    #[inline(always)]
+    pub(crate) fn get_mut_basket_channel(
+        &mut self,
+        basket_id: BasketId,
+    ) -> Option<&mut BasketServiceClient<Channel>> {
+        self.channels
+            .iter_mut()
+            .find(|(found_channel_id, _)| *found_channel_id == basket_id)
+            .map(|(_, channel)| channel)
+    }
+}
+
+pub(crate) struct BasketBalancerGrpcServer<BasketSet>
+where
+    BasketSet: Default + crate::basket_set::traits::BasketSet + Send + Sync + 'static,
+{
+    basket_pool: Arc<ProtectedBasketPool<BasketSet>>,
+}
+
+impl<BasketSet> BasketBalancerGrpcServer<BasketSet>
+where
+    BasketSet: Default + crate::basket_set::traits::BasketSet + Send + Sync + 'static,
+{
+    #[inline(always)]
+    pub(crate) fn new(basket_pool: Arc<ProtectedBasketPool<BasketSet>>) -> Self {
+        Self { basket_pool }
+    }
 }
 
 #[tonic::async_trait]
-impl<BasketSet> basket_balancer_server::BasketBalancer for ProtectedBasketPool<BasketSet>
+impl<BasketSet> basket_balancer_server::BasketBalancer for BasketBalancerGrpcServer<BasketSet>
 where
     BasketSet: Default + crate::basket_set::traits::BasketSet + Send + Sync + 'static,
 {
@@ -93,7 +123,7 @@ where
     ) -> Result<Response<cb_request::Response>, Status> {
         let cb_request::Request { uri, basket_id } = request.into_inner();
 
-        let mut basket_pool = self.basket_pool.lock().await;
+        let mut basket_pool = self.basket_pool.basket_pool.lock().await;
         let (error_message, status) = basket_pool
             .establish_new_channel(basket_id as BasketId, &uri)
             .await
@@ -111,6 +141,12 @@ where
     }
 }
 
+pub(crate) static BASKET_IS_READY: AtomicBool = AtomicBool::new(false);
+
 fn subscribe_to_rabbit_and_start_processing_messages() {
-    println!("SUCCESS: Subscribing to rabbit and starting to handle requests.");
+    if let Ok(_) =
+        BASKET_IS_READY.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+    {
+        println!("SUCCESS: Subscribing to rabbit and starting to handle requests.");
+    }
 }
