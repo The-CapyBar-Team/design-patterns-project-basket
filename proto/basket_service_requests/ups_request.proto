@@ -4,9 +4,9 @@ package ups_request;
 
 message Request {
   int32 product_id = 1;
-  uint32 product_stock = 2;
+  uint32 product_stock_increase = 2;
 }
 
 message Response {
-  uint32 ok = 1;
+  uint32 queue_shift = 1;
 }

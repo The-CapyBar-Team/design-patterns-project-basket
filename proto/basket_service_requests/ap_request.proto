@@ -1,16 +1,19 @@
 syntax = "proto3";
 
-package hp_request;
+package ap_request;
 
 enum FailureStatus {
-    HOLDERS_QUEUE_ALREADY_FULL = 0;
-    PRODUCT_NOT_FOUND = 1;
+    PRODUCT_NOT_FOUND = 0;
+    HOLDERS_QUEUE_NOT_FULL_YET = 1;
     USER_ALREADY_ADDED = 2;
+    PREMATURE_AWAIT = 3;
+    QueuePositionIsIncorrect = 4;
 }
 
 message Request {
   string user_id = 1;
   int32 product_id = 2;
+  uint32 queue_position = 3;
 }
 
 message Response {
@@ -23,6 +26,7 @@ message Response {
 message Success {
   string user_id = 1;
   int32 product_id = 2;
+  uint32 queue_position = 3; // return queue_position to send it in a response to client
 }
 
 message Failure {

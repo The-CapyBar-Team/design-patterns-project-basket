@@ -1,30 +1,57 @@
-use crate::basket::{Basket, BasketError};
+use crate::basket::Basket;
+use crate::error::{ap_request_error_to_status, hp_request_error_to_status, HpRequestError};
 use basket_communication::basket_service::basket_service_server;
-use basket_communication::basket_service::{hp_request, ups_request};
-use std::sync::Mutex;
+use basket_communication::basket_service::{ap_request, hp_request, ups_request};
+use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
 
 pub(crate) struct BasketContext {
     basket: Mutex<Basket>,
 }
 
+impl BasketContext {
+    #[inline(always)]
+    pub(crate) fn new(basket: Basket) -> Self {
+        Self {
+            basket: Mutex::new(basket),
+        }
+    }
+}
+
 #[tonic::async_trait]
 impl basket_service_server::BasketService for BasketContext {
+    // TODO: when stock is increased, make some awaiters holders
+    // TODO: when awaiters become holders the following
+    //       invariant inconsistency may happen:
+    //       basket: [holders, awaiters]
+    //       [10/10, 0], [10/10, 5]
+    //       after ups (+3 on each):
+    //       [10/13, 0], [13/13, 2]
+    // That's an issue, as there're 3 free holder-places, while
+    // there still 2 awaiters!
+    // We can resolve this by counting awaiters of each basket
+    // on balancer (by sending the new awaiters count as responses
+    // from modifying requests).
     #[inline(always)]
     async fn perform_ups(
         &self,
         request: Request<ups_request::Request>,
     ) -> Result<Response<ups_request::Response>, Status> {
-        // let args = request.into_inner();
-        // println!(
-        //     "basket_service | stock updated for product: product_id={} new_stock={}",
-        //     args.product_id, args.product_stock
-        // );
-        // let mut basket = self.basket.lock().unwrap();
-        // basket.update_product_stock(args.product_id, args.product_stock);
+        let ups_request::Request {
+            product_id,
+            product_stock_increase,
+        } = request.into_inner();
 
-        // Ok(Response::new(ups_request::Response { ok: 1 }))
-        todo!()
+        let mut basket = self.basket.lock().await;
+        basket.update_product_stock(product_id, product_stock_increase);
+        drop(basket);
+
+        println!(
+            "UPS | product_id = {}, product_stock_increase = {}",
+            product_id, product_stock_increase
+        );
+
+        Ok(Response::new(ups_request::Response { queue_shift: 0 }))
     }
 
     // TODO: What if user_id is not identical and one user can do hp twice? he would be able to
@@ -41,128 +68,73 @@ impl basket_service_server::BasketService for BasketContext {
             product_id,
         } = request.into_inner();
 
-        println!("HP | user_id: {}, product_id: {}", user_id, product_id);
+        let mut basket = self.basket.lock().await;
+        let holding_result = basket.add_product_holder(product_id, user_id.clone());
+        drop(basket);
 
-        let response = hp_request::Response {
-            response: Some(Success(hp_request::Success {
-                user_id: 121,
-                product_id: 122,
-                queue_position: 123,
-                status: hp_request::SuccessStatus::ProductHeldByUser as i32,
-            })),
+        let response = match holding_result {
+            Ok(()) => hp_request::Response {
+                response: Some(Success(hp_request::Success {
+                    user_id: user_id.clone(),
+                    product_id,
+                })),
+            },
+            Err(err) => hp_request::Response {
+                response: Some(Failure(hp_request::Failure {
+                    error_message: err.to_string(),
+                    status: hp_request_error_to_status(err).into(),
+                })),
+            },
         };
 
+        println!(
+            "HP | user_id: {}, product_id: {}, response: {:?}",
+            user_id, product_id, response
+        );
+
         Ok(Response::new(response))
-
-        // let failure_response = hp_request::Response {
-        //     response: Some(Failure(hp_request::Failure {
-        //         error_message: todo!(),
-        //         status: todo!(),
-        //     })),
-        // };
     }
-}
 
-impl BasketContext {
     #[inline(always)]
-    pub(crate) fn new(basket: Basket) -> Self {
-        Self {
-            basket: Mutex::new(basket),
-        }
+    async fn perform_ap(
+        &self,
+        request: Request<ap_request::Request>,
+    ) -> Result<Response<ap_request::Response>, Status> {
+        use ap_request::response::Response::Failure;
+        use ap_request::response::Response::Success;
+
+        let ap_request::Request {
+            user_id,
+            product_id,
+            queue_position,
+        } = request.into_inner();
+
+        let mut basket = self.basket.lock().await;
+        let holding_result =
+            basket.add_product_awaiter(product_id, user_id.clone(), queue_position);
+        drop(basket);
+
+        let response = match holding_result {
+            Ok(()) => ap_request::Response {
+                response: Some(Success(ap_request::Success {
+                    user_id: user_id.clone(),
+                    product_id,
+                    queue_position,
+                })),
+            },
+            Err(err) => ap_request::Response {
+                response: Some(Failure(ap_request::Failure {
+                    error_message: err.to_string(),
+                    status: ap_request_error_to_status(err).into(),
+                })),
+            },
+        };
+
+        println!(
+            "HP | user_id: {}, product_id: {}, response: {:?}",
+            user_id, product_id, response
+        );
+
+        Ok(Response::new(response))
     }
-
-    // #[inline(always)]
-    // pub(crate) fn update_product_stock_requeest_received(&mut self, args: ups_request::Request) {
-    //     println!(
-    //         "basket_service | stock updated for product: product_id={} new_stock={}",
-    //         args.product_id, args.product_stock
-    //     );
-    //     self.basket
-    //         .update_product_stock(args.product_id, args.product_stock);
-    // }
-
-    // #[inline(always)]
-    // pub(crate) fn hold_product_request_received(
-    //     &mut self,
-    //     args: hp_request::Request,
-    // ) -> hp_request::Response {
-    //     match self
-    //         .basket
-    //         .add_product_holder(args.product_id, args.user_id, args.queue_position)
-    //     {
-    //         Ok(()) => {
-    //             println!(
-    //                 "basket_service | hold_product_request_received | successfully held product: product_id={} user_id={}",
-    //                 args.product_id, args.user_id
-    //             );
-    //             hp_request::Response {
-    //                 user_id: args.user_id,
-    //                 product_id: args.product_id,
-    //                 queue_position: args.queue_position,
-    //                 status: hp_request::ProductStatus::ProductHeldByUser.into(),
-    //             }
-    //         }
-    //         Err(error) => {
-    //             eprintln!(
-    //                 "basket_service | hold_product_request_received | Error: {}",
-    //                 error
-    //             );
-    //             hp_request::Response {
-    //                 user_id: args.user_id,
-    //                 product_id: args.product_id,
-    //                 queue_position: args.queue_position,
-    //                 status: add_product_holder_error_to_status(error).into(),
-    //             }
-    //         }
-    //     }
-    // }
-
-    // #[inline(always)]
-    // pub(crate) fn await_product_request_received(
-    //     &mut self,
-    //     args: hp_request::Request,
-    // ) -> hp_request::Response {
-    //     match self
-    //         .basket
-    //         .add_product_awaiter(args.product_id, args.user_id, args.queue_position)
-    //     {
-    //         Ok(()) => {
-    //             println!(
-    //                 "basket_service | await_product_request_received | successfully held product: product_id={} user_id={}",
-    //                 args.product_id, args.user_id
-    //             );
-    //             hp_request::Response {
-    //                 user_id: args.user_id,
-    //                 product_id: args.product_id,
-    //                 queue_position: args.queue_position,
-    //                 status: hp_request::ProductStatus::ProductHeldByUser.into(),
-    //             }
-    //         }
-    //         Err(error) => {
-    //             eprintln!(
-    //                 "basket_service | await_product_request_received | Error: {}",
-    //                 error
-    //             );
-    //             hp_request::Response {
-    //                 user_id: args.user_id,
-    //                 product_id: args.product_id,
-    //                 queue_position: args.queue_position,
-    //                 status: add_product_holder_error_to_status(error).into(),
-    //             }
-    //         }
-    //     }
-    // }
 }
-
-// #[inline(always)]
-// fn add_product_holder_error_to_status(error: BasketError) -> hp_request::ProductStatus {
-//     use hp_request::ProductStatus as ProtoStatus;
-
-//     match error {
-//         BasketError::ProductNotFound(_, _) => ProtoStatus::ProductNotFound,
-//         BasketError::HoldersQueueAlreadyFull(_, _) => ProtoStatus::HoldersQueueAlreadyFull,
-//         BasketError::PrematureAwait(_, _) => ProtoStatus::PrematureAwait,
-//         BasketError::UserAlreadyAdded(_, _) => ProtoStatus::UserAlreadyAdded,
-//         BasketError::QueuePositionIsIncorrect(_, _, _) => ProtoStatus::QueuePositionIsIncorrect,
-//     }
-// }

@@ -9,7 +9,11 @@ use std::sync::Arc;
 // HP = "Hold Product"
 // AP = "Await Request"
 pub(crate) trait RequestSender {
-    fn perform_ups_request(&mut self, basket_id: BasketId, request_args: ups_request::Request);
+    async fn perform_ups_request(
+        &mut self,
+        basket_id: BasketId,
+        request_args: ups_request::Request,
+    ) -> Option<ups_request::Response>;
 
     async fn perform_hp_request(
         &mut self,
@@ -40,11 +44,19 @@ impl<BasketSet> RequestSender for BasicRequestSender<BasketSet>
 where
     BasketSet: Default + crate::basket_set::traits::BasketSet,
 {
-    fn perform_ups_request(&mut self, basket_id: BasketId, request_args: ups_request::Request) {
-        println!(
-            "Sending stock (={}) of product #{} update to basket #{}",
-            request_args.product_stock, request_args.product_id, basket_id
-        );
+    async fn perform_ups_request(
+        &mut self,
+        basket_id: BasketId,
+        request: ups_request::Request,
+    ) -> Option<ups_request::Response> {
+        let mut basket_pool = self.basket_pool.basket_pool.lock().await;
+        let channel = basket_pool.get_mut_basket_channel(basket_id)?;
+
+        channel
+            .perform_ups(request)
+            .await
+            .map(|response| response.into_inner())
+            .ok()
     }
 
     async fn perform_hp_request(
@@ -64,11 +76,9 @@ where
             .map(|response| response.into_inner().response)
         {
             Ok(Some(Success(
-                a @ hp_request::Success {
-                    user_id,
+                ref a @ hp_request::Success {
+                    ref user_id,
                     product_id,
-                    queue_position,
-                    status,
                 },
             ))) => {
                 println!("hp_request | received success: {:?}", a);

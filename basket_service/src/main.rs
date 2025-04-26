@@ -11,6 +11,7 @@ use tonic::Request;
 
 mod basket;
 mod callbacks;
+mod error;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

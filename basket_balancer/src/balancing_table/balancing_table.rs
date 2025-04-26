@@ -1,19 +1,18 @@
 use super::error::BalancerError;
 use crate::basket_pool::basket_pool::ProtectedBasketPool;
+use crate::basket_set::MAX_BASKETS_COUNT;
 use crate::requests;
 use crate::types::BasketId;
 use basket_communication::basket_service::hp_request;
 use basket_communication::basket_service::hp_request::{
     Request as hp_or_ap_request, Response as hp_or_ap_response,
 };
-use basket_communication::basket_service::ups_request::Request as ups_request;
+use basket_communication::basket_service::ups_request;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-
-const NUMBER_OF_BASKETS: BasketId = 4;
 
 #[derive(Default)]
 struct ProductBalancingInfo<BasketBalancer>
@@ -65,14 +64,20 @@ where
         let basket_balancer = {
             let mut basket_balancer = BasketBalancer::default();
 
-            for (basket_id, stock_piece) in (0..NUMBER_OF_BASKETS).zip(stock_distribution) {
-                self.request_sender.lock().await.perform_ups_request(
-                    basket_id,
-                    ups_request {
-                        product_id,
-                        product_stock: stock_piece,
-                    },
-                );
+            for (basket_id, stock_piece) in (0..MAX_BASKETS_COUNT).zip(stock_distribution) {
+                let ups_request::Response { queue_shift } = self
+                    .request_sender
+                    .lock()
+                    .await
+                    .perform_ups_request(
+                        basket_id,
+                        ups_request::Request {
+                            product_id,
+                            product_stock_increase: stock_piece,
+                        },
+                    )
+                    .await
+                    .unwrap(); // TODO: remove this unwrap
                 basket_balancer.add_basket_id(basket_id);
             }
 
@@ -105,22 +110,16 @@ where
         product_id: ProductId,
         user_id: UserId,
     ) -> Result<(), BalancerError> {
-        println!("hp_request | begining");
-
         let mut binding = self.products_to_balancing_info.lock().await;
         let balancing_info = binding
             .get_mut(&product_id)
             .ok_or(BalancerError::ProductNotFound(product_id, user_id.clone()))?;
-
-        println!("hp_request | retrieved balancing info");
 
         while let Some(next_basket_id) = {
             self.synchronize_with_global_basket_set(balancing_info)
                 .await;
             balancing_info.basket_balancer.choose_next_basket()
         } {
-            println!("hp_request | next_basket_chosen: {}", next_basket_id);
-
             if let Some(()) = self
                 .request_sender
                 .lock()
@@ -134,20 +133,12 @@ where
                 )
                 .await
             {
-                println!("hp_request | hp request sent successfully");
                 break;
             }
-
-            println!("hp_request | hp request returned false");
 
             balancing_info
                 .basket_balancer
                 .remove_basket_id(next_basket_id);
-
-            println!(
-                "hp_request | removed basket id {} from the balancing info",
-                next_basket_id
-            );
         }
 
         if balancing_info.basket_balancer.is_empty() {
@@ -160,15 +151,11 @@ where
                 .choose_next_basket()
                 .expect("We must have at least one basket");
 
-            println!("hp_request | chose next basket for ap request");
-
             self.request_sender.lock().await.perform_ap_request(
                 next_basket_id,
                 product_id,
                 user_id,
             );
-
-            println!("hp_request | performed ap request");
         }
 
         Ok(())
@@ -179,7 +166,6 @@ where
         &self,
         balancing_info: &mut ProductBalancingInfo<BasketBalancer>,
     ) {
-        println!("hp_request | synchronized with global basket set");
         balancing_info.basket_balancer.intersect(
             &self
                 .basket_pool
@@ -194,31 +180,19 @@ where
 // TODO: use SmallVec here
 #[inline(always)]
 fn distribute_stock(stock: ProductStock) -> Vec<ProductStock> {
-    let div = stock / (NUMBER_OF_BASKETS as ProductStock);
-    let rem = stock % (NUMBER_OF_BASKETS as ProductStock);
+    let div = stock / (MAX_BASKETS_COUNT as ProductStock);
+    let rem = stock % (MAX_BASKETS_COUNT as ProductStock);
     let mut distribution = Vec::new();
 
     for _ in 0..rem {
         distribution.push(div + 1);
     }
 
-    for _ in rem..(NUMBER_OF_BASKETS as ProductStock) {
+    for _ in rem..(MAX_BASKETS_COUNT as ProductStock) {
         distribution.push(div);
     }
 
     distribution
-}
-
-#[inline(always)]
-fn choose_next_basket(available_baskets: &[BasketId]) -> Option<BasketId> {
-    use rand::Rng;
-
-    if available_baskets.is_empty() {
-        None
-    } else {
-        let mut rng = rand::thread_rng();
-        Some(rng.gen_range(0..available_baskets.len()) as u8)
-    }
 }
 
 #[cfg(test)]
@@ -227,7 +201,7 @@ mod tests {
 
     // const PRODUCT_ID: ProductId = 13124;
     // const INITIAL_STOCK: ProductStock = 1012382;
-    // const MIN_DISTRIBUTION_VALUE: ProductStock = INITIAL_STOCK / NUMBER_OF_BASKETS as ProductStock;
+    // const MIN_DISTRIBUTION_VALUE: ProductStock = INITIAL_STOCK / MAX_BASKETS_COUNT as ProductStock;
     // const MAX_DISTRIBUTION_VALUE: ProductStock = MIN_DISTRIBUTION_VALUE + 1;
 
     // #[derive(Default)]
@@ -242,7 +216,7 @@ mod tests {
     // impl Default for MockRequestSender {
     //     fn default() -> Self {
     //         Self {
-    //             baskets: (0..NUMBER_OF_BASKETS)
+    //             baskets: (0..MAX_BASKETS_COUNT)
     //                 .map(|basket_id| (basket_id, Default::default()))
     //                 .collect(),
     //         }
