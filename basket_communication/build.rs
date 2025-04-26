@@ -11,6 +11,7 @@ fn main() {
         "basket_balancer_requests/cb_request.proto",
         "basket_service.proto",
         "basket_balancer.proto",
+        "external.proto",
     ];
 
     let include = ["", "basket_service_requests", "basket_balancer_requests"]

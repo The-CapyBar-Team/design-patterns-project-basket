@@ -16,6 +16,7 @@ mod balancing_table;
 mod basket_pool;
 mod basket_set;
 mod requests;
+mod responses;
 mod types;
 mod utilities;
 
@@ -37,7 +38,12 @@ async fn main() -> anyhow::Result<()> {
 
         let product_id = 128;
 
-        balancing_table.update_product_stock(product_id, (10 * crate::basket_set::MAX_BASKETS_COUNT).into()).await;
+        balancing_table
+            .update_product_stock(
+                product_id,
+                (10 * crate::basket_set::MAX_BASKETS_COUNT).into(),
+            )
+            .await;
         println!("ups is done");
 
         for id in 0..usize::MAX {

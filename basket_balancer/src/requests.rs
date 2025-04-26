@@ -1,9 +1,13 @@
 use crate::basket_pool::basket_pool::ProtectedBasketPool;
 use crate::types::BasketId;
-use basket_communication::basket_service::hp_request;
-use basket_communication::basket_service::ups_request;
+use basket_communication::basket_service::{ap_request, hp_request, ups_request};
 use basket_communication::types::{ProductId, UserId};
 use std::sync::Arc;
+
+pub(crate) enum GrpcFailure<CustomError> {
+    Custom(CustomError),
+    Internal,
+}
 
 // UPS = "Update Product's Stock"
 // HP = "Hold Product"
@@ -21,7 +25,11 @@ pub(crate) trait RequestSender {
         request: hp_request::Request,
     ) -> Option<()>;
 
-    fn perform_ap_request(&mut self, basket_id: BasketId, product_id: ProductId, user_id: UserId);
+    async fn perform_ap_request(
+        &mut self,
+        basket_id: BasketId,
+        request: ap_request::Request,
+    ) -> Result<ap_request::Success, GrpcFailure<ap_request::Failure>>;
 }
 
 pub(crate) struct BasicRequestSender<BasketSet>
@@ -67,14 +75,16 @@ where
         use hp_request::response::Response::Failure;
         use hp_request::response::Response::Success;
 
-        let mut basket_pool = self.basket_pool.basket_pool.lock().await;
-        let channel = basket_pool.get_mut_basket_channel(basket_id)?;
+        let response = {
+            let mut basket_pool = self.basket_pool.basket_pool.lock().await;
+            let channel = basket_pool.get_mut_basket_channel(basket_id)?;
+            channel
+                .perform_hp(request)
+                .await
+                .map(|response| response.into_inner().response)
+        };
 
-        match channel
-            .perform_hp(request)
-            .await
-            .map(|response| response.into_inner().response)
-        {
+        match response {
             Ok(Some(Success(
                 ref a @ hp_request::Success {
                     ref user_id,
@@ -108,10 +118,29 @@ where
         }
     }
 
-    fn perform_ap_request(&mut self, basket_id: BasketId, product_id: ProductId, user_id: UserId) {
-        println!(
-            "Delegating to basket #{} awaiting product: product_id = {}, user_id = {}",
-            basket_id, product_id, user_id
-        );
+    async fn perform_ap_request(
+        &mut self,
+        basket_id: BasketId,
+        request: ap_request::Request,
+    ) -> Result<ap_request::Success, GrpcFailure<ap_request::Failure>> {
+        use ap_request::response::Response::Failure;
+        use ap_request::response::Response::Success;
+
+        let response = {
+            let mut basket_pool = self.basket_pool.basket_pool.lock().await;
+            let channel = basket_pool
+                .get_mut_basket_channel(basket_id)
+                .ok_or(GrpcFailure::Internal)?;
+            channel
+                .perform_ap(request)
+                .await
+                .map(|response| response.into_inner().response)
+        };
+
+        match response {
+            Ok(Some(Success(ap_success))) => Ok(ap_success),
+            Ok(Some(Failure(ap_failure))) => Err(GrpcFailure::Custom(ap_failure)),
+            Ok(None) | Err(_) => Err(GrpcFailure::Internal),
+        }
     }
 }

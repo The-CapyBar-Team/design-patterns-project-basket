@@ -7,7 +7,7 @@ enum FailureStatus {
     HOLDERS_QUEUE_NOT_FULL_YET = 1;
     USER_ALREADY_ADDED = 2;
     PREMATURE_AWAIT = 3;
-    QueuePositionIsIncorrect = 4;
+    QUEUE_POSITION_IS_INCORRECT = 4;
 }
 
 message Request {

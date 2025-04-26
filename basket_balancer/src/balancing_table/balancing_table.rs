@@ -1,13 +1,15 @@
 use super::error::BalancerError;
 use crate::basket_pool::basket_pool::ProtectedBasketPool;
 use crate::basket_set::MAX_BASKETS_COUNT;
-use crate::requests;
+use crate::requests::{self, GrpcFailure};
+use crate::responses::send_hap_response;
 use crate::types::BasketId;
-use basket_communication::basket_service::hp_request;
 use basket_communication::basket_service::hp_request::{
     Request as hp_or_ap_request, Response as hp_or_ap_response,
 };
 use basket_communication::basket_service::ups_request;
+use basket_communication::basket_service::{ap_request, hp_request};
+use basket_communication::external;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -120,6 +122,8 @@ where
                 .await;
             balancing_info.basket_balancer.choose_next_basket()
         } {
+            println!("LOOP | next_basket_id = {}", next_basket_id);
+
             if let Some(()) = self
                 .request_sender
                 .lock()
@@ -133,8 +137,16 @@ where
                 )
                 .await
             {
-                break;
+                send_hap_response(external::QueuePositionUpdate {
+                    product_id,
+                    queue_position: None,
+                    acquisition_time: None,
+                })
+                .await;
+                return Ok(());
             }
+
+            println!("LOOP | after hp try | next_basket_id = {}", next_basket_id);
 
             balancing_info
                 .basket_balancer
@@ -151,11 +163,53 @@ where
                 .choose_next_basket()
                 .expect("We must have at least one basket");
 
-            self.request_sender.lock().await.perform_ap_request(
-                next_basket_id,
-                product_id,
-                user_id,
-            );
+            let response = self
+                .request_sender
+                .lock()
+                .await
+                .perform_ap_request(
+                    next_basket_id,
+                    ap_request::Request {
+                        product_id,
+                        user_id,
+                        queue_position: balancing_info.queue_size,
+                    },
+                )
+                .await;
+
+            match response {
+                Ok(ap_request::Success {
+                    user_id,
+                    product_id,
+                    queue_position,
+                }) => {
+                    send_hap_response(external::QueuePositionUpdate {
+                        product_id,
+                        queue_position: Some(queue_position),
+                        acquisition_time: Some(0),
+                    })
+                    .await
+                }
+
+                Err(GrpcFailure::Custom(ap_request::Failure {
+                    error_message,
+                    status,
+                })) => {
+                    println!(
+                        "!<>! Custom AP Error | status = {:?}, message: '{}'",
+                        status, error_message
+                    );
+                }
+
+                Err(GrpcFailure::Internal) => {
+                    println!(
+                        "!<>! Internal AP Error | basket with id = {} did not respond to ap_request",
+                        next_basket_id
+                    );
+                }
+            }
+
+            balancing_info.queue_size += 1;
         }
 
         Ok(())

@@ -358,6 +358,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "basket_communication",
+ "lapin",
  "rand",
  "thiserror",
  "tokio",

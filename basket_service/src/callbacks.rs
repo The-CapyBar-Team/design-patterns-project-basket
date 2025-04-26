@@ -46,11 +46,6 @@ impl basket_service_server::BasketService for BasketContext {
         basket.update_product_stock(product_id, product_stock_increase);
         drop(basket);
 
-        println!(
-            "UPS | product_id = {}, product_stock_increase = {}",
-            product_id, product_stock_increase
-        );
-
         Ok(Response::new(ups_request::Response { queue_shift: 0 }))
     }
 
@@ -86,11 +81,6 @@ impl basket_service_server::BasketService for BasketContext {
                 })),
             },
         };
-
-        println!(
-            "HP | user_id: {}, product_id: {}, response: {:?}",
-            user_id, product_id, response
-        );
 
         Ok(Response::new(response))
     }
@@ -129,11 +119,6 @@ impl basket_service_server::BasketService for BasketContext {
                 })),
             },
         };
-
-        println!(
-            "HP | user_id: {}, product_id: {}, response: {:?}",
-            user_id, product_id, response
-        );
 
         Ok(Response::new(response))
     }
