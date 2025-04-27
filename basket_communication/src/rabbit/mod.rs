@@ -1,2 +1,2 @@
 pub mod error;
-pub mod rabbit;
+pub mod listener;

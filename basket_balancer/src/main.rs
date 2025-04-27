@@ -5,12 +5,12 @@ use balancing_table::balancing_table::BalancingTable;
 use basket_communication::basket_balancer::basket_balancer_server::BasketBalancerServer;
 use basket_communication::external::ProductStockList;
 use basket_communication::rabbit::error::RabbitError;
-use basket_communication::rabbit::rabbit::RabbitListener;
+use basket_communication::rabbit::listener::RabbitListener;
 use basket_pool::basket_pool::{BasketBalancerGrpcServer, ProtectedBasketPool};
 use basket_set::vec_balancing_set::VecBalancingSet;
 use std::sync::Arc;
-use tonic::transport::Server;
 use tokio::sync::Mutex;
+use tonic::transport::Server;
 
 mod balancing_table;
 mod basket_pool;
