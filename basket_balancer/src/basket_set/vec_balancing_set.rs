@@ -37,7 +37,10 @@ impl BasketSet for VecBalancingSet {
             .position(|&found_basket_id| found_basket_id == basket_id)
         {
             self.available_baskets.swap_remove(position);
-            println!("REMOVE | basket_id = {}, current_list = {:?}", basket_id, self.available_baskets);
+            println!(
+                "REMOVE | basket_id = {}, current_list = {:?}",
+                basket_id, self.available_baskets
+            );
         }
     }
 

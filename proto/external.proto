@@ -58,19 +58,14 @@ message LostProduct {
 }
 
 // APIGateway -> BasketLoadBalancer (when user wants to check the status of the product)
-message ProductsStatusRequest {
-	repeated ProductStatusRequest statusRequests = 1;
-}
 message ProductStatusRequest {
 	string userId = 1;
-	int32 productId = 2;
 }
 
 // BasketLoadBalancer -> APIGateway (when product status has been updated while user was away)
 message ProductStatusUpdate {
 	string userId = 1;
 	repeated QueuePositionUpdate newQueuePositions = 2;
-	repeated int32 lostProducts = 3;
 }
 
 message QueuePositionUpdate {
