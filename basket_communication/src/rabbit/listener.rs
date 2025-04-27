@@ -67,7 +67,7 @@ where
     }
 
     #[inline(always)]
-    pub async fn listen_to_messages(&mut self, listener: impl Fn(MessageType)) {
+    pub async fn listen_to_messages(&mut self, listener: impl AsyncFn(MessageType)) {
         while let Some(delivery) = self.consumer.next().await {
             if let Err(error) = self.process_delivery(delivery, &listener).await {
                 eprintln!("!<>! Error while listening to rabbit: {:?}", error);
@@ -80,13 +80,13 @@ where
     async fn process_delivery(
         &mut self,
         delivery: Result<Delivery, lapin::Error>,
-        listener: &impl Fn(MessageType),
+        listener: &impl AsyncFn(MessageType),
     ) -> Result<(), String> {
         match delivery {
             Ok(delivery) => {
                 let message =
                     MessageType::decode(&delivery.data[..]).map_err(|err| err.to_string())?;
-                listener(message);
+                listener(message).await;
 
                 self.channel
                     .basic_ack(delivery.delivery_tag, BasicAckOptions::default())

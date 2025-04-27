@@ -23,7 +23,8 @@ where
     loop {
         match action().await {
             Ok(result) => return result,
-            Err(error) => eprintln!("Retry Error: {:?}", error),
+            Err(error) => eprintln!("Retry Error: {}", error),
         }
+        std::thread::sleep(std::time::Duration::from_secs(2));
     }
 }

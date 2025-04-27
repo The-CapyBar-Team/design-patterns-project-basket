@@ -10,7 +10,9 @@ use basket_communication::basket_service::hp_request::{
 use basket_communication::basket_service::ups_request;
 use basket_communication::basket_service::{ap_request, hp_request};
 use basket_communication::external;
+use basket_communication::rabbit::sender::RabbitSender;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -25,6 +27,14 @@ where
     queue_size: QueuePosition,
 }
 
+pub(crate) struct ResponseSender {
+    pub(crate) queue_position_update_message_sender:
+        RabbitSender<external::QueuePositionUpdateMessage>,
+    pub(crate) lost_product_sender: RabbitSender<external::LostProduct>,
+    pub(crate) product_status_update_sender: RabbitSender<external::ProductStatusUpdate>,
+    pub(crate) decrease_stock_request_sender: RabbitSender<external::DecreaseStockRequest>,
+}
+
 pub(crate) struct BalancingTable<RequestSender, BasketBalancer>
 where
     RequestSender: requests::RequestSender,
@@ -32,7 +42,8 @@ where
         Default + crate::basket_set::traits::BasketSet + crate::basket_set::traits::BasketBalancer,
 {
     products_to_balancing_info: Mutex<HashMap<ProductId, ProductBalancingInfo<BasketBalancer>>>, // TODO: think of using Vec instead of HashMap as a map
-    request_sender: Arc<Mutex<RequestSender>>,
+    request_sender: Arc<Mutex<RequestSender>>, //TODO: remove mutex
+    response_sender: Arc<Mutex<ResponseSender>>,
     basket_pool: Arc<ProtectedBasketPool<BasketBalancer>>,
 }
 
@@ -45,10 +56,12 @@ where
     #[inline(always)]
     pub(crate) fn new(
         request_sender: Arc<Mutex<RequestSender>>,
+        response_sender: Arc<Mutex<ResponseSender>>,
         basket_pool: Arc<ProtectedBasketPool<BasketBalancer>>,
     ) -> Self {
         Self {
             products_to_balancing_info: Default::default(),
+            response_sender,
             request_sender,
             basket_pool,
         }
@@ -136,12 +149,19 @@ where
                 )
                 .await
             {
-                send_hap_response(external::QueuePositionUpdate {
-                    product_id,
-                    queue_position: None,
-                    acquisition_time: None,
-                })
-                .await;
+                self.response_sender
+                    .lock()
+                    .await
+                    .queue_position_update_message_sender
+                    .send_message(external::QueuePositionUpdateMessage {
+                        user_id,
+                        update_message: Some(external::QueuePositionUpdate {
+                            product_id,
+                            queue_position: None,
+                            acquisition_time: None,
+                        }),
+                    })
+                    .await;
                 return Ok(());
             }
 
@@ -182,12 +202,19 @@ where
                     product_id,
                     queue_position,
                 }) => {
-                    send_hap_response(external::QueuePositionUpdate {
-                        product_id,
-                        queue_position: Some(queue_position),
-                        acquisition_time: Some(0),
-                    })
-                    .await
+                    self.response_sender
+                        .lock()
+                        .await
+                        .queue_position_update_message_sender
+                        .send_message(external::QueuePositionUpdateMessage {
+                            user_id,
+                            update_message: Some(external::QueuePositionUpdate {
+                                product_id,
+                                queue_position: Some(queue_position),
+                                acquisition_time: Some(0),
+                            }),
+                        })
+                        .await;
                 }
 
                 Err(GrpcFailure::Custom(ap_request::Failure {
