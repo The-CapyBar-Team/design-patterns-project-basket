@@ -6,7 +6,7 @@ use basket_communication::rabbit::rabbit::RabbitListener;
 #[inline(always)]
 pub(crate) async fn listener(rabbit_connection_string: String) {
     let mut ups_rabbit_listener = retry_and_report_error(async move || {
-        RabbitListener::<ProductStockList>::new(&rabbit_connection_string, "ProductStockList").await
+        RabbitListener::<ProductStockList>::new(&rabbit_connection_string, "ProductStockLists").await
     })
     .await;
 
