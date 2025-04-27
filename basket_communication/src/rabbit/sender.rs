@@ -58,6 +58,8 @@ where
         &mut self,
         message: MessageType,
     ) -> Result<(), RabbitMessageSendError> {
+        println!("debug | balancer | sending message: {:?}", message);
+
         let payload = message.encode_to_vec();
 
         self.channel

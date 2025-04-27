@@ -33,6 +33,10 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
 
     ups_rabbit_listener
         .listen_to_messages(async move |ProductStockList { ref products }| {
+            println!(
+                "debug | balancer | received ProductStockList with products: {:?}",
+                products
+            );
             for ProductStockInfo {
                 product_id,
                 stock_change,
