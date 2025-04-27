@@ -1,5 +1,5 @@
-mod ups_request {
+mod ups_request_proto {
     tonic::include_proto!("ups_request");
 }
 
-pub use ups_request::*;
+pub use ups_request_proto::*;

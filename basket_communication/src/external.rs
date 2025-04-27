@@ -1,5 +1,5 @@
-mod external {
+mod external_proto {
     tonic::include_proto!("external");
 }
 
-pub use external::*;
+pub use external_proto::*;
