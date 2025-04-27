@@ -4,7 +4,6 @@ use crate::requests;
 use crate::utilities::retry_and_report_error;
 use basket_communication::external::{ProductStockInfo, ProductStockList};
 use basket_communication::rabbit::listener::RabbitListener;
-use std::cell::RefCell;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -33,9 +32,7 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
     let balancing_table = balancing_table.clone();
 
     ups_rabbit_listener
-        .listen_to_messages(async move |message| {
-            let ProductStockList { ref products } = message;
-
+        .listen_to_messages(async move |ProductStockList { ref products }| {
             for ProductStockInfo {
                 product_id,
                 stock_change,

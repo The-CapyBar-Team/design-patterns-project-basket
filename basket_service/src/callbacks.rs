@@ -1,5 +1,5 @@
 use crate::basket::Basket;
-use crate::error::{ap_request_error_to_status, hp_request_error_to_status, HpRequestError};
+use crate::error::{ap_request_error_to_status, hp_request_error_to_status};
 use basket_communication::basket_service::basket_service_server;
 use basket_communication::basket_service::{ap_request, hp_request, ups_request};
 use tokio::sync::Mutex;

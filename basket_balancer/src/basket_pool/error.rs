@@ -1,6 +1,5 @@
 use crate::types::BasketId;
 use basket_communication::basket_balancer::cb_request;
-use basket_communication::types::{ProductId, UserId};
 use std::error::Error;
 use thiserror::Error;
 

@@ -53,11 +53,6 @@ impl BasketSet for VecBalancingSet {
     fn is_full(&self) -> bool {
         self.available_baskets.len() >= MAX_BASKETS_COUNT.into()
     }
-
-    #[inline(always)]
-    fn dump(&self) -> String {
-        format!("{:?}", self.available_baskets)
-    }
 }
 
 impl BasketBalancer for VecBalancingSet {

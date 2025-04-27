@@ -1,7 +1,6 @@
 use crate::basket_pool::basket_pool::ProtectedBasketPool;
 use crate::types::BasketId;
 use basket_communication::basket_service::{ap_request, hp_request, ups_request};
-use basket_communication::types::{ProductId, UserId};
 use std::sync::Arc;
 
 pub(crate) enum GrpcFailure<CustomError> {

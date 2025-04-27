@@ -4,7 +4,6 @@ use crate::requests;
 use crate::utilities::retry_and_report_error;
 use basket_communication::external::ProductStockInfo;
 use basket_communication::rabbit::listener::RabbitListener;
-use std::cell::RefCell;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

@@ -15,7 +15,7 @@ pub(crate) const fn parse_u8(s: &str) -> u8 {
     result
 }
 
-pub(crate) async fn retry_and_report_error<F, R, E>(mut action: F) -> R
+pub(crate) async fn retry_and_report_error<F, R, E>(action: F) -> R
 where
     F: AsyncFn() -> Result<R, E>,
     E: std::error::Error,

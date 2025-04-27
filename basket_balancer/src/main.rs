@@ -1,18 +1,13 @@
 use crate::balancing_table::balancing_table::ResponseSender;
 use crate::basket_pool::basket_pool::wait_until_basket_is_ready;
-use crate::basket_set::traits::*;
 use crate::listeners::*;
 use crate::requests::BasicRequestSender;
 use balancing_table::balancing_table::BalancingTable;
-use basket_communication::external::ProductStockList;
-use basket_communication::rabbit::error::RabbitError;
-use basket_communication::rabbit::listener::RabbitListener;
 use basket_communication::{
     basket_balancer::basket_balancer_server::BasketBalancerServer, rabbit::sender::RabbitSender,
 };
 use basket_pool::basket_pool::{BasketBalancerGrpcServer, ProtectedBasketPool};
 use basket_set::vec_balancing_set::VecBalancingSet;
-use std::cell::RefCell;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Server;
@@ -23,7 +18,6 @@ mod basket_pool;
 mod basket_set;
 mod listeners;
 mod requests;
-mod responses;
 mod types;
 mod utilities;
 
@@ -89,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
             .expect("Internal GRPC-server error");
     });
 
-    wait_until_basket_is_ready();
+    wait_until_basket_is_ready().await;
 
     let response_sender = create_response_sender(rabbit_connection_string.clone()).await;
     let mut balancing_table = Arc::new(Mutex::new(BalancingTable::new(

@@ -1,10 +1,9 @@
 use basket::Basket;
 use basket_communication::basket_balancer::basket_balancer_client::BasketBalancerClient;
-use basket_communication::basket_balancer::cb_request::{self, Request as CbRequest};
+use basket_communication::basket_balancer::cb_request::Request as CbRequest;
 use basket_communication::basket_balancer_requests::cb_request::ConnectionStatus;
 use basket_communication::basket_service::basket_service_server::BasketServiceServer;
 use callbacks::*;
-use num::FromPrimitive;
 use std::env;
 use tonic::transport::Server;
 use tonic::Request;
@@ -48,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
             std::thread::sleep(std::time::Duration::from_secs(5));
         };
 
-        let response = loop {
+        let _ = loop {
             let request = Request::new(CbRequest {
                 uri: basket_service_uri.clone(),
                 basket_id,

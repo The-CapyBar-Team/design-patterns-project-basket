@@ -4,14 +4,13 @@ use crate::requests;
 use crate::utilities::retry_and_report_error;
 use basket_communication::external::AddToCartRequest;
 use basket_communication::rabbit::listener::RabbitListener;
-use std::cell::RefCell;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[inline(always)]
 pub(crate) async fn listener<RequestSender, BasketBalancer>(
     rabbit_connection_string: String,
-    _balancing_table: Arc<Mutex<BalancingTable<RequestSender, BasketBalancer>>>,
+    balancing_table: Arc<Mutex<BalancingTable<RequestSender, BasketBalancer>>>,
 ) where
     RequestSender: requests::RequestSender + Send,
     BasketBalancer: Default
@@ -27,8 +26,20 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
     wait_until_basket_is_ready().await;
 
     ups_rabbit_listener
-        .listen_to_messages(async |message| {
-            println!("Rabbit | AddToCartRequest: {:?}", message);
-        })
+        .listen_to_messages(
+            async move |AddToCartRequest {
+                            user_id,
+                            product_id,
+                        }| {
+                if let Err(hap_error) = balancing_table
+                    .lock()
+                    .await
+                    .add_product_to_basket(product_id, user_id)
+                    .await
+                {
+                    eprintln!("!<>! Adding to cart error: {}", hap_error);
+                }
+            },
+        )
         .await;
 }

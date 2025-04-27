@@ -2,17 +2,11 @@ use super::error::BalancerError;
 use crate::basket_pool::basket_pool::ProtectedBasketPool;
 use crate::basket_set::MAX_BASKETS_COUNT;
 use crate::requests::{self, GrpcFailure};
-use crate::responses::send_hap_response;
-use crate::types::BasketId;
-use basket_communication::basket_service::hp_request::{
-    Request as hp_or_ap_request, Response as hp_or_ap_response,
-};
 use basket_communication::basket_service::ups_request;
 use basket_communication::basket_service::{ap_request, hp_request};
 use basket_communication::external;
 use basket_communication::rabbit::sender::RabbitSender;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -79,6 +73,7 @@ where
             let mut basket_balancer = BasketBalancer::default();
 
             for (basket_id, stock_piece) in (0..MAX_BASKETS_COUNT).zip(stock_distribution) {
+                // TODO: not ignore queue_shift
                 let ups_request::Response { queue_shift } = self
                     .request_sender
                     .lock()
@@ -149,7 +144,8 @@ where
                 )
                 .await
             {
-                self.response_sender
+                if let Err(send_error) = self
+                    .response_sender
                     .lock()
                     .await
                     .queue_position_update_message_sender
@@ -161,7 +157,14 @@ where
                             acquisition_time: None,
                         }),
                     })
-                    .await;
+                    .await
+                {
+                    eprintln!(
+                        "!<>! Error sending QueuePositionUpdateMessage response: {}",
+                        send_error
+                    );
+                }
+
                 return Ok(());
             }
 
@@ -202,7 +205,8 @@ where
                     product_id,
                     queue_position,
                 }) => {
-                    self.response_sender
+                    if let Err(send_error) = self
+                        .response_sender
                         .lock()
                         .await
                         .queue_position_update_message_sender
@@ -214,7 +218,10 @@ where
                                 acquisition_time: Some(0),
                             }),
                         })
-                        .await;
+                        .await
+                    {
+                        eprintln!("!<>! Error sending response: {}", send_error); // TODO: provide proper error handling
+                    }
                 }
 
                 Err(GrpcFailure::Custom(ap_request::Failure {
