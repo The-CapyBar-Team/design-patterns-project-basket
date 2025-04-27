@@ -11,7 +11,6 @@ use basket_communication::basket_service::ups_request;
 use basket_communication::basket_service::{ap_request, hp_request};
 use basket_communication::external;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;

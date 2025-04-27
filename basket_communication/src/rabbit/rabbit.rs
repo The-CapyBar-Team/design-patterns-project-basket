@@ -69,11 +69,14 @@ where
     #[inline(always)]
     pub async fn listen_to_messages(&mut self, listener: impl Fn(MessageType)) {
         while let Some(delivery) = self.consumer.next().await {
+            println!("!!! delivery accepted");
             if let Err(error) = self.process_delivery(delivery, &listener).await {
                 eprintln!("!<>! Error while listening to rabbit: {:?}", error);
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
         }
+
+        println!("!!! Listening ended!");
     }
 
     #[inline(always)]

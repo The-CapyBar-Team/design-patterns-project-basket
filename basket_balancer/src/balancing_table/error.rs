@@ -1,4 +1,3 @@
-use crate::types::BasketId;
 use basket_communication::types::{ProductId, UserId};
 use thiserror::Error;
 

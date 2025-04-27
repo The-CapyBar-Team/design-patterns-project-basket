@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
 use tonic::transport::Channel;
-use tonic::{Code, Request, Response, Status};
+use tonic::{Request, Response, Status};
 
 // pub(crate) trait BasketSerBounds: Default + crate::basket_set::traits::BasketSet
 // // + std::marker::Sync + std::marker::Send + 'static
@@ -141,7 +141,14 @@ where
     }
 }
 
-pub(crate) static BASKET_IS_READY: AtomicBool = AtomicBool::new(false);
+static BASKET_IS_READY: AtomicBool = AtomicBool::new(false);
+
+#[inline(always)]
+pub(crate) async fn wait_until_basket_is_ready() {
+    while !BASKET_IS_READY.load(Ordering::Acquire) {
+        tokio::task::yield_now().await;
+    }
+}
 
 fn subscribe_to_rabbit_and_start_processing_messages() {
     if let Ok(_) =

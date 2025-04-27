@@ -1,23 +1,21 @@
-use crate::basket_pool::basket_pool::BASKET_IS_READY;
 use crate::basket_set::traits::*;
+use crate::listeners::*;
 use crate::requests::BasicRequestSender;
 use balancing_table::balancing_table::BalancingTable;
 use basket_communication::basket_balancer::basket_balancer_server::BasketBalancerServer;
 use basket_communication::external::ProductStockList;
 use basket_communication::rabbit::error::RabbitError;
 use basket_communication::rabbit::rabbit::RabbitListener;
-use basket_communication::types::ProductId;
 use basket_pool::basket_pool::{BasketBalancerGrpcServer, ProtectedBasketPool};
 use basket_set::vec_balancing_set::VecBalancingSet;
-use std::cell::RefCell;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
-use tokio::sync::Mutex;
 use tonic::transport::Server;
+use tokio::sync::Mutex;
 
 mod balancing_table;
 mod basket_pool;
 mod basket_set;
+mod listeners;
 mod requests;
 mod responses;
 mod types;
@@ -27,6 +25,7 @@ type BasketBalancingSetImplementation = VecBalancingSet;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let rabbit_connection_string = "amqp://guest:guest@rabbitmq:5672".to_owned();
     let basket_pool = Arc::new(ProtectedBasketPool::<BasketBalancingSetImplementation>::default());
     let request_sender = Arc::new(Mutex::new(BasicRequestSender::new(basket_pool.clone())));
     let mut balancing_table = BalancingTable::new(request_sender.clone(), basket_pool.clone());
@@ -43,58 +42,91 @@ async fn main() -> anyhow::Result<()> {
             .expect("Internal GRPC-server error");
     });
 
-    let rabbit_listener = tokio::spawn(async move {
-        let mut ups_rabbit_listener = RabbitListener::<ProductStockList>::new(
-            "amqp://guest:guest@localhost:5672",
-            "ProductStockList",
-        )
-        .await
-        .unwrap(); // TODO: remove this unwrap
+    let add_to_cart_request_listener = tokio::spawn({
+        let connection_string = rabbit_connection_string.clone();
 
-        while !BASKET_IS_READY.load(Ordering::Acquire) {
-            tokio::task::yield_now().await;
+        async move {
+            add_to_cart_request::listener(connection_string).await;
         }
-
-        ups_rabbit_listener
-            .listen_to_messages(|message| {
-                println!("MESSAGE RECEIVED FROM RABBIT: {:?}", message);
-            })
-            .await;
     });
 
-    // let hp_request_generator = tokio::spawn(async move {
-    //     while !BASKET_IS_READY.load(Ordering::Acquire) {
-    //         std::thread::yield_now();
-    //     }
+    let buy_product_request_listener = tokio::spawn({
+        let connection_string = rabbit_connection_string.clone();
 
-    //     println!("BASKET IS READY: Starting sending hp-requests");
+        async move {
+            buy_product_request::listener(connection_string).await;
+        }
+    });
 
-    //     let product_id = 128;
+    let product_status_request_listener = tokio::spawn({
+        let connection_string = rabbit_connection_string.clone();
 
-    //     balancing_table
-    //         .update_product_stock(
-    //             product_id,
-    //             (10 * crate::basket_set::MAX_BASKETS_COUNT).into(),
-    //         )
-    //         .await;
-    //     println!("ups is done");
+        async move {
+            product_status_request::listener(connection_string).await;
+        }
+    });
 
-    //     for id in 0..usize::MAX {
-    //         let user_id = id.to_string();
-    //         if let Err(err) = balancing_table
-    //             .add_product_to_basket(product_id, user_id)
-    //             .await
-    //         {
-    //             println!("add_product_to_basket error: {}", err);
-    //         }
+    let product_stock_info_listener = tokio::spawn({
+        let connection_string = rabbit_connection_string.clone();
 
-    //         std::thread::sleep(std::time::Duration::from_secs(2));
-    //     }
-    // });
+        async move {
+            product_stock_info::listener(connection_string).await;
+        }
+    });
 
-    rabbit_listener.await?;
+    let product_stock_list_listener = tokio::spawn({
+        let connection_string = rabbit_connection_string.clone();
+
+        async move {
+            product_stock_list::listener(connection_string).await;
+        }
+    });
+
+    let remove_from_cart_request_listener = tokio::spawn({
+        let connection_string = rabbit_connection_string.clone();
+
+        async move {
+            remove_from_cart_request::listener(connection_string).await;
+        }
+    });
+
+    add_to_cart_request_listener.await?;
+    buy_product_request_listener.await?;
+    product_status_request_listener.await?;
+    product_stock_info_listener.await?;
+    remove_from_cart_request_listener.await?;
+    product_stock_list_listener.await?;
     grpc_server_handle.await?;
-    // hp_request_generator.await?;
 
     Ok(())
 }
+
+// let hp_request_generator = tokio::spawn(async move {
+//     while !BASKET_IS_READY.load(Ordering::Acquire) {
+//         std::thread::yield_now();
+//     }
+
+//     println!("BASKET IS READY: Starting sending hp-requests");
+
+//     let product_id = 128;
+
+//     balancing_table
+//         .update_product_stock(
+//             product_id,
+//             (10 * crate::basket_set::MAX_BASKETS_COUNT).into(),
+//         )
+//         .await;
+//     println!("ups is done");
+
+//     for id in 0..usize::MAX {
+//         let user_id = id.to_string();
+//         if let Err(err) = balancing_table
+//             .add_product_to_basket(product_id, user_id)
+//             .await
+//         {
+//             println!("add_product_to_basket error: {}", err);
+//         }
+
+//         std::thread::sleep(std::time::Duration::from_secs(2));
+//     }
+// });
