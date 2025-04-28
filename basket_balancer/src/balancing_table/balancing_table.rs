@@ -171,18 +171,24 @@ where
                             "!<>! AddToCartRequest | ProductNotFound | {}",
                             error_message
                         );
+
+                        return Ok(());
                     } // TODO: add handling of ProductNotFound
                     Some(hp_request::FailureStatus::UserAlreadyAdded) => {
                         eprintln!(
                             "!<>! AddToCartRequest | UserAlreadyAdded | {}",
                             error_message
                         );
+
+                        return Ok(());
                     } // TODO: add handling of UserAlreadyAdded
                     None => {
                         eprintln!(
                             "!<>! AddToCartRequest | unknown status code of hp_request::FailureStatus: {}",
                             status
                         );
+
+                        return Ok(());
                     }
                 },
 
