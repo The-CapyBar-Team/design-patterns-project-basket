@@ -119,15 +119,6 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    let product_stock_info_listener = tokio::spawn({
-        let connection_string = rabbit_connection_string.clone();
-        let balancing_table = balancing_table.clone();
-
-        async move {
-            product_stock_info::listener(connection_string, balancing_table).await;
-        }
-    });
-
     let product_stock_list_listener = tokio::spawn({
         let connection_string = rabbit_connection_string.clone();
         let balancing_table = balancing_table.clone();
@@ -149,7 +140,6 @@ async fn main() -> anyhow::Result<()> {
     add_to_cart_request_listener.await?;
     buy_product_request_listener.await?;
     product_status_request_listener.await?;
-    product_stock_info_listener.await?;
     remove_from_cart_request_listener.await?;
     product_stock_list_listener.await?;
     grpc_server_handle.await?;
