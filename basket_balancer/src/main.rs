@@ -27,7 +27,7 @@ async fn create_response_sender(rabbit_connection_string: String) -> Arc<Mutex<R
     let queue_position_update_message_sender = {
         let connection_string = rabbit_connection_string.clone();
         retry_and_report_error(async move || {
-            RabbitSender::new(&connection_string, "QueuePositionUpdateMessage").await
+            RabbitSender::new(&connection_string, "QueuePositionUpdates").await
         })
         .await
     };
@@ -35,7 +35,7 @@ async fn create_response_sender(rabbit_connection_string: String) -> Arc<Mutex<R
     let lost_product_sender = {
         let connection_string = rabbit_connection_string.clone();
         retry_and_report_error(async move || {
-            RabbitSender::new(&connection_string, "LostProduct").await
+            RabbitSender::new(&connection_string, "LostProducts").await
         })
         .await
     };
@@ -43,7 +43,7 @@ async fn create_response_sender(rabbit_connection_string: String) -> Arc<Mutex<R
     let product_status_update_sender = {
         let connection_string = rabbit_connection_string.clone();
         retry_and_report_error(async move || {
-            RabbitSender::new(&connection_string, "ProductStatusUpdate").await
+            RabbitSender::new(&connection_string, "ProductStatusUpdates").await
         })
         .await
     };
@@ -51,7 +51,7 @@ async fn create_response_sender(rabbit_connection_string: String) -> Arc<Mutex<R
     let decrease_stock_request_sender = {
         let connection_string = rabbit_connection_string.clone();
         retry_and_report_error(async move || {
-            RabbitSender::new(&connection_string, "DecreaseStockRequest").await
+            RabbitSender::new(&connection_string, "DecreaseStockRequests").await
         })
         .await
     };

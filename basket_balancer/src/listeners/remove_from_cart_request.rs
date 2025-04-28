@@ -21,7 +21,7 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
     let mut ups_rabbit_listener = retry_and_report_error(async move || {
         RabbitListener::<RemoveFromCartRequest>::new(
             &rabbit_connection_string,
-            "RemoveFromCartRequest",
+            "RemoveFromCartRequests",
         )
         .await
     })

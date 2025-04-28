@@ -19,7 +19,7 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
         + Send,
 {
     let mut ups_rabbit_listener = retry_and_report_error(async move || {
-        RabbitListener::<BuyProductRequest>::new(&rabbit_connection_string, "BuyProductRequest")
+        RabbitListener::<BuyProductRequest>::new(&rabbit_connection_string, "BuyProductRequests")
             .await
     })
     .await;
