@@ -42,6 +42,8 @@ impl basket_service_server::BasketService for BasketContext {
             product_stock_increase,
         } = request.into_inner();
 
+        println!("debug | basket_service | received ups request: product_id = {}, product_stock_increase = {}", product_id, product_stock_increase);
+
         let mut basket = self.basket.lock().await;
         basket.update_product_stock(product_id, product_stock_increase);
         drop(basket);
