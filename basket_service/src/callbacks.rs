@@ -1,5 +1,5 @@
 use crate::basket::Basket;
-use crate::error::{ap_request_error_to_status, hp_request_error_to_status};
+use crate::error::{ap_request_error_to_status, hp_request_error_to_status, LocallyLoggedError};
 use basket_communication::basket_service::basket_service_server;
 use basket_communication::basket_service::{ap_request, hp_request, ups_request};
 use tokio::sync::Mutex;
@@ -106,7 +106,7 @@ impl basket_service_server::BasketService for BasketContext {
             basket.add_product_awaiter(product_id, user_id.clone(), queue_position);
         drop(basket);
 
-        let response = match holding_result {
+        let response = match holding_result.map_err(|err| ap_request_error_to_status(err)) {
             Ok(()) => ap_request::Response {
                 response: Some(Success(ap_request::Success {
                     user_id: user_id.clone(),
@@ -114,12 +114,20 @@ impl basket_service_server::BasketService for BasketContext {
                     queue_position,
                 })),
             },
-            Err(err) => ap_request::Response {
+            Err(Ok(status)) => ap_request::Response {
                 response: Some(Failure(ap_request::Failure {
-                    error_message: err.to_string(),
-                    status: ap_request_error_to_status(err).into(),
+                    status: status.into(),
                 })),
             },
+            Err(Err(LocallyLoggedError { error })) => {
+                eprintln!("!<>! | basket_service | locally logged error | {}", error);
+
+                ap_request::Response {
+                    response: Some(Failure(ap_request::Failure {
+                        status: ap_request::FailureStatus::LoggedInternallyError.into(),
+                    })),
+                }
+            }
         };
 
         Ok(Response::new(response))

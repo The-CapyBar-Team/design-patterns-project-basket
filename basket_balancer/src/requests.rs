@@ -22,7 +22,7 @@ pub(crate) trait RequestSender {
         &mut self,
         basket_id: BasketId,
         request: hp_request::Request,
-    ) -> Option<()>;
+    ) -> Result<hp_request::Success, GrpcFailure<hp_request::Failure>>;
 
     async fn perform_ap_request(
         &mut self,
@@ -70,13 +70,15 @@ where
         &mut self,
         basket_id: BasketId,
         request: hp_request::Request,
-    ) -> Option<()> {
+    ) -> Result<hp_request::Success, GrpcFailure<hp_request::Failure>> {
         use hp_request::response::Response::Failure;
         use hp_request::response::Response::Success;
 
         let response = {
             let mut basket_pool = self.basket_pool.basket_pool.lock().await;
-            let channel = basket_pool.get_mut_basket_channel(basket_id)?;
+            let channel = basket_pool
+                .get_mut_basket_channel(basket_id)
+                .ok_or(GrpcFailure::Internal)?;
             channel
                 .perform_hp(request)
                 .await
@@ -84,36 +86,10 @@ where
         };
 
         match response {
-            Ok(Some(Success(
-                ref a @ hp_request::Success {
-                    ref user_id,
-                    product_id,
-                },
-            ))) => {
-                println!("hp_request | received success: {:?}", a);
-                Some(())
-            }
-
-            Ok(Some(Failure(hp_request::Failure {
-                error_message,
-                status,
-            }))) => {
-                println!(
-                    "hp_request | received failure | status = {}, error_message = {}",
-                    status, error_message
-                );
-                None
-            }
-
-            Err(err) => {
-                println!("hp_request | received Err(err): {}", err);
-                None
-            }
-
-            Ok(_) => {
-                println!("hp_request | received Ok(None)");
-                None
-            }
+            Ok(Some(Success(success))) => Ok(success),
+            Ok(Some(Failure(failure))) => Err(GrpcFailure::Custom(failure)),
+            Err(_) => Err(GrpcFailure::Internal),
+            Ok(_) => Err(GrpcFailure::Internal),
         }
     }
 

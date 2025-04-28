@@ -1,4 +1,4 @@
-use crate::balancing_table::balancing_table::ResponseSender;
+use crate::balancing_table::response_sender::ResponseSender;
 use crate::basket_pool::basket_pool::wait_until_basket_is_ready;
 use crate::listeners::*;
 use crate::requests::BasicRequestSender;
@@ -56,12 +56,12 @@ async fn create_response_sender(rabbit_connection_string: String) -> Arc<Mutex<R
         .await
     };
 
-    Arc::new(Mutex::new(ResponseSender {
+    Arc::new(Mutex::new(ResponseSender::new(
         queue_position_update_message_sender,
         lost_product_sender,
         product_status_update_sender,
         decrease_stock_request_sender,
-    }))
+    )))
 }
 
 #[tokio::main]
@@ -86,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
     wait_until_basket_is_ready().await;
 
     let response_sender = create_response_sender(rabbit_connection_string.clone()).await;
-    let mut balancing_table = Arc::new(Mutex::new(BalancingTable::new(
+    let balancing_table = Arc::new(Mutex::new(BalancingTable::new(
         request_sender.clone(),
         response_sender,
         basket_pool.clone(),

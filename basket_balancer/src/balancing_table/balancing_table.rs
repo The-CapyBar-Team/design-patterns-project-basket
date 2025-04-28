@@ -1,11 +1,11 @@
 use super::error::BalancerError;
+use super::response_sender::ResponseSender;
 use crate::basket_pool::basket_pool::ProtectedBasketPool;
 use crate::basket_set::MAX_BASKETS_COUNT;
 use crate::requests::{self, GrpcFailure};
 use basket_communication::basket_service::ups_request;
 use basket_communication::basket_service::{ap_request, hp_request};
 use basket_communication::external;
-use basket_communication::rabbit::sender::RabbitSender;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -19,14 +19,6 @@ where
 {
     basket_balancer: BasketBalancer,
     queue_size: QueuePosition,
-}
-
-pub(crate) struct ResponseSender {
-    pub(crate) queue_position_update_message_sender:
-        RabbitSender<external::QueuePositionUpdateMessage>,
-    pub(crate) lost_product_sender: RabbitSender<external::LostProduct>,
-    pub(crate) product_status_update_sender: RabbitSender<external::ProductStatusUpdate>,
-    pub(crate) decrease_stock_request_sender: RabbitSender<external::DecreaseStockRequest>,
 }
 
 pub(crate) struct BalancingTable<RequestSender, BasketBalancer>
@@ -131,7 +123,7 @@ where
         } {
             println!("LOOP | next_basket_id = {}", next_basket_id);
 
-            if let Some(()) = self
+            let hp_response = self
                 .request_sender
                 .lock()
                 .await
@@ -142,108 +134,120 @@ where
                         product_id,
                     },
                 )
-                .await
-            {
-                if let Err(send_error) = self
-                    .response_sender
-                    .lock()
-                    .await
-                    .queue_position_update_message_sender
-                    .send_message(external::QueuePositionUpdateMessage {
-                        user_id,
-                        update_message: Some(external::QueuePositionUpdate {
-                            product_id,
-                            queue_position: None,
-                            acquisition_time: None,
-                        }),
-                    })
-                    .await
-                {
-                    eprintln!(
-                        "!<>! Error sending QueuePositionUpdateMessage response: {}",
-                        send_error
-                    );
-                }
-
-                return Ok(());
-            }
-
-            println!("LOOP | after hp try | next_basket_id = {}", next_basket_id);
-
-            balancing_info
-                .basket_balancer
-                .remove_basket_id(next_basket_id);
-        }
-
-        if balancing_info.basket_balancer.is_empty() {
-            let next_basket_id = self
-                .basket_pool
-                .basket_pool
-                .lock()
-                .await
-                .actual_basket_set()
-                .choose_next_basket()
-                .expect("We must have at least one basket");
-
-            let response = self
-                .request_sender
-                .lock()
-                .await
-                .perform_ap_request(
-                    next_basket_id,
-                    ap_request::Request {
-                        product_id,
-                        user_id,
-                        queue_position: balancing_info.queue_size,
-                    },
-                )
                 .await;
 
-            match response {
-                Ok(ap_request::Success {
+            match hp_response {
+                Ok(hp_request::Success {
                     user_id,
                     product_id,
-                    queue_position,
                 }) => {
-                    if let Err(send_error) = self
-                        .response_sender
+                    self.response_sender
                         .lock()
                         .await
-                        .queue_position_update_message_sender
-                        .send_message(external::QueuePositionUpdateMessage {
+                        .send_queue_position_update(external::QueuePositionUpdateMessage {
                             user_id,
                             update_message: Some(external::QueuePositionUpdate {
                                 product_id,
-                                queue_position: Some(queue_position),
-                                acquisition_time: Some(0),
+                                queue_position: None,
+                                acquisition_time: None,
                             }),
                         })
-                        .await
-                    {
-                        eprintln!("!<>! Error sending response: {}", send_error); // TODO: provide proper error handling
-                    }
+                        .await;
+
+                    return Ok(());
                 }
 
-                Err(GrpcFailure::Custom(ap_request::Failure {
+                Err(GrpcFailure::Custom(hp_request::Failure {
                     error_message,
                     status,
-                })) => {
-                    println!(
-                        "!<>! Custom AP Error | status = {:?}, message: '{}'",
-                        status, error_message
-                    );
-                }
+                })) => match hp_request::FailureStatus::from_i32(status) {
+                    Some(hp_request::FailureStatus::HoldersQueueAlreadyFull) => {
+                        balancing_info
+                            .basket_balancer
+                            .remove_basket_id(next_basket_id);
+                    }
+                    Some(hp_request::FailureStatus::ProductNotFound) => {
+                        eprintln!(
+                            "!<>! AddToCartRequest | ProductNotFound | {}",
+                            error_message
+                        );
+                    } // TODO: add handling of ProductNotFound
+                    Some(hp_request::FailureStatus::UserAlreadyAdded) => {
+                        eprintln!(
+                            "!<>! AddToCartRequest | UserAlreadyAdded | {}",
+                            error_message
+                        );
+                    } // TODO: add handling of UserAlreadyAdded
+                    None => {
+                        eprintln!(
+                            "!<>! AddToCartRequest | unknown status code of hp_request::FailureStatus: {}",
+                            status
+                        );
+                    }
+                },
 
                 Err(GrpcFailure::Internal) => {
-                    println!(
-                        "!<>! Internal AP Error | basket with id = {} did not respond to ap_request",
-                        next_basket_id
-                    );
-                }
+                    eprintln!("!<>! AddToCartRequest | internal grpc error");
+                } // TODO: add protection agains internal errors
+            }
+        }
+
+        let next_basket_id = self
+            .basket_pool
+            .basket_pool
+            .lock()
+            .await
+            .actual_basket_set()
+            .choose_next_basket()
+            .expect("We must have at least one basket");
+
+        let response = self
+            .request_sender
+            .lock()
+            .await
+            .perform_ap_request(
+                next_basket_id,
+                ap_request::Request {
+                    product_id,
+                    user_id,
+                    queue_position: balancing_info.queue_size,
+                },
+            )
+            .await;
+
+        match response {
+            Ok(ap_request::Success {
+                user_id,
+                product_id,
+                queue_position,
+            }) => {
+                self.response_sender
+                    .lock()
+                    .await
+                    .send_queue_position_update(external::QueuePositionUpdateMessage {
+                        user_id,
+                        update_message: Some(external::QueuePositionUpdate {
+                            product_id,
+                            queue_position: Some(queue_position),
+                            acquisition_time: Some(0),
+                        }),
+                    })
+                    .await
             }
 
-            balancing_info.queue_size += 1;
+            Err(GrpcFailure::Custom(ap_request::Failure { status })) => {
+                println!("!<>! Custom AP Error | status = {:?}", status);
+            }
+
+            Err(GrpcFailure::Internal) => {
+                println!(
+                    "!<>! Internal AP Error | basket with id = {} did not respond to ap_request",
+                    next_basket_id
+                );
+            }
         }
+
+        balancing_info.queue_size += 1;
 
         Ok(())
     }

@@ -24,11 +24,6 @@ pub(crate) enum ApRequestError {
     ProductNotFound(ProductId, UserId),
 
     #[error(
-        "[UserId='`{1}`'] Cannot hold product with id `'{0}'`: holders queue reached its max size"
-    )]
-    HoldersQueueNotFullYet(ProductId, UserId),
-
-    #[error(
         "[UserId='`{1}`'] The user is already added to the context of the product with id {0}"
     )]
     UserAlreadyAdded(ProductId, UserId),
@@ -39,6 +34,10 @@ pub(crate) enum ApRequestError {
     #[cfg(feature = "extra_protection")]
     #[error("[UserId='`{1}`'] The queue position {2} is already occupied for product with id {0}")]
     QueuePositionIsIncorrect(ProductId, UserId, QueuePosition),
+}
+
+pub(crate) struct LocallyLoggedError<Error> {
+    pub(crate) error: Error,
 }
 
 #[inline(always)]
@@ -53,14 +52,15 @@ pub(crate) fn hp_request_error_to_status(error: HpRequestError) -> hp_request::F
 }
 
 #[inline(always)]
-pub(crate) fn ap_request_error_to_status(error: ApRequestError) -> ap_request::FailureStatus {
+pub(crate) fn ap_request_error_to_status(
+    error: ApRequestError,
+) -> Result<ap_request::FailureStatus, LocallyLoggedError<ApRequestError>> {
     use ap_request::FailureStatus as ProtoStatus;
 
     match error {
-        ApRequestError::ProductNotFound(_, _) => ProtoStatus::ProductNotFound,
-        ApRequestError::HoldersQueueNotFullYet(_, _) => ProtoStatus::HoldersQueueNotFullYet,
-        ApRequestError::UserAlreadyAdded(_, _) => ProtoStatus::UserAlreadyAdded,
-        ApRequestError::PrematureAwait(_, _) => ProtoStatus::PrematureAwait,
-        ApRequestError::QueuePositionIsIncorrect(_, _, _) => ProtoStatus::QueuePositionIsIncorrect,
+        ApRequestError::ProductNotFound(_, _) => Ok(ProtoStatus::ProductNotFound),
+        ApRequestError::UserAlreadyAdded(_, _) => Ok(ProtoStatus::UserAlreadyAdded),
+        ApRequestError::PrematureAwait(_, _) => Err(LocallyLoggedError { error }),
+        ApRequestError::QueuePositionIsIncorrect(_, _, _) => Err(LocallyLoggedError { error }),
     }
 }

@@ -86,6 +86,7 @@ impl Basket {
         if product_context
             .product_holders
             .iter()
+            .chain(product_context.product_awaiters.iter())
             .any(|existent_holder_info| existent_holder_info.user_id == holder_id)
         {
             return Err(HpRequestError::UserAlreadyAdded(product_id, holder_id));

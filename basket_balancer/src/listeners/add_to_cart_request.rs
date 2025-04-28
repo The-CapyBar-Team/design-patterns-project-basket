@@ -19,7 +19,8 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
         + Send,
 {
     let mut ups_rabbit_listener = retry_and_report_error(async move || {
-        RabbitListener::<AddToCartRequest>::new(&rabbit_connection_string, "AddToCartRequests").await
+        RabbitListener::<AddToCartRequest>::new(&rabbit_connection_string, "AddToCartRequests")
+            .await
     })
     .await;
 
@@ -30,9 +31,11 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
             async move |AddToCartRequest {
                             user_id,
                             product_id,
-                        }|
-            {
-                println!("debug | balancer | received AddToCartRequest: user_id = {}, product_id = {}", user_id, product_id);
+                        }| {
+                println!(
+                    "debug | balancer | received AddToCartRequest: user_id = {}, product_id = {}",
+                    user_id, product_id
+                );
                 if let Err(hap_error) = balancing_table
                     .lock()
                     .await

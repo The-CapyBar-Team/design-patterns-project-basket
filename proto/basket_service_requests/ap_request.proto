@@ -4,10 +4,8 @@ package ap_request;
 
 enum FailureStatus {
     PRODUCT_NOT_FOUND = 0;
-    HOLDERS_QUEUE_NOT_FULL_YET = 1;
-    USER_ALREADY_ADDED = 2;
-    PREMATURE_AWAIT = 3;
-    QUEUE_POSITION_IS_INCORRECT = 4;
+    USER_ALREADY_ADDED = 1;
+    LOGGED_INTERNALLY_ERROR = 2;
 }
 
 message Request {
@@ -30,6 +28,5 @@ message Success {
 }
 
 message Failure {
-  string error_message = 1;
-  FailureStatus status = 2;
+  FailureStatus status = 1;
 }
