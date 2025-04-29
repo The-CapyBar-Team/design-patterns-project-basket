@@ -66,7 +66,12 @@ where
         let basket_balancer = {
             let mut basket_balancer = BasketBalancer::default();
 
+            // TODO: rely on global balancer, not on 0..MAX_BASKETS_COUNT
             for (basket_id, stock_piece) in (0..MAX_BASKETS_COUNT).zip(stock_distribution) {
+                if stock_piece == 0 {
+                    continue;
+                }
+
                 // TODO: not ignore queue_shift
                 let ups_request::Response { queue_shift } = self
                     .request_sender
