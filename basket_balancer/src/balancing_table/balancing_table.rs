@@ -68,10 +68,6 @@ where
 
             // TODO: rely on global balancer, not on 0..MAX_BASKETS_COUNT
             for (basket_id, stock_piece) in (0..MAX_BASKETS_COUNT).zip(stock_distribution) {
-                if stock_piece == 0 {
-                    continue;
-                }
-
                 // TODO: not ignore queue_shift
                 let ups_request::Response { queue_shift } = self
                     .request_sender
@@ -86,7 +82,12 @@ where
                     )
                     .await
                     .unwrap(); // TODO: remove this unwrap
-                basket_balancer.add_basket_id(basket_id);
+
+                // We still send ups so that basket knows that the good exists
+                // however the stock is 0, so we do not add it as available basket for the product.
+                if stock_piece > 0 {
+                    basket_balancer.add_basket_id(basket_id);
+                }
             }
 
             basket_balancer
