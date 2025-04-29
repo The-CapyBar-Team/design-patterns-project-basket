@@ -4,7 +4,9 @@ use crate::error::{
     LocallyLoggedError,
 };
 use basket_communication::basket_service::basket_service_server;
-use basket_communication::basket_service::{ap_request, hp_request, ru_request, ups_request};
+use basket_communication::basket_service::{
+    ap_request, hp_request, ru_request, sq_request, ups_request,
+};
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
 
@@ -184,6 +186,53 @@ impl basket_service_server::BasketService for BasketContext {
                         status: ru_request::FailureStatus::LoggedInternallyError.into(),
                     })),
                 }
+            }
+        };
+
+        Ok(Response::new(response))
+    }
+
+    #[inline(always)]
+    async fn perform_sq(
+        &self,
+        request: Request<sq_request::Request>,
+    ) -> Result<Response<sq_request::Response>, Status> {
+        use sq_request::response::Response::Failure;
+        use sq_request::response::Response::Success;
+
+        let sq_request::Request {
+            product_id,
+            max_removed_queue_position,
+            shift,
+        } = request.into_inner();
+
+        let mut basket = self.basket.lock().await;
+        let shift_result =
+            basket.shift_queue_positions_of_product(product_id, max_removed_queue_position, shift);
+        drop(basket);
+
+        let response = if let Some(queue_shifts) = shift_result {
+            let queue_shifts = queue_shifts
+                .into_iter()
+                .map(
+                    |ru_request::QueueShift {
+                         user_id,
+                         new_queue_position,
+                     }| sq_request::QueueShift {
+                        user_id,
+                        new_queue_position,
+                    },
+                )
+                .collect();
+
+            sq_request::Response {
+                response: Some(Success(sq_request::Success { queue_shifts })),
+            }
+        } else {
+            sq_request::Response {
+                response: Some(Failure(sq_request::Failure {
+                    status: sq_request::FailureStatus::ProductNotFound.into(),
+                })),
             }
         };
 

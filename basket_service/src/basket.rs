@@ -273,7 +273,7 @@ impl Basket {
     }
 
     #[inline(always)]
-    fn shift_queue_positions_of_product(
+    pub(crate) fn shift_queue_positions_of_product(
         &mut self,
         product_id: ProductId,
         max_removed_queue_position: QueuePosition,
