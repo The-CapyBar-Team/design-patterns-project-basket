@@ -292,12 +292,21 @@ where
 
             match response {
                 Ok(received_ru_success) => {
+                    println!(
+                        "debug | balancer | ru_request | user removed from basket_id = {}",
+                        basket_id
+                    );
                     ru_success = Some((basket_id, received_ru_success));
                 }
 
                 Err(GrpcFailure::Custom(ru_request::Failure { status })) => {
                     match ru_request::FailureStatus::from_i32(status) {
-                        Some(ru_request::FailureStatus::UserNotFound) => {}
+                        Some(ru_request::FailureStatus::UserNotFound) => {
+                            println!(
+                                "debug | balancer | ru_request | user not found for basket_id = {}",
+                                basket_id
+                            );
+                        }
                         Some(ru_request::FailureStatus::ProductNotFound) => {
                             eprintln!("!<>! RemoveFromCartRequest | ProductNotFound");
                         }
@@ -347,6 +356,10 @@ where
 
                         match sq_response {
                             Ok(sq_request::Success { queue_shifts }) => {
+                                println!(
+                                    "debug | balancer | sq_request | queue shifts fro basket (id = {}): {:?}",
+                                    basket_id, queue_shifts
+                                );
                                 collected_queue_shifts.push(queue_shifts);
                             }
 
@@ -393,7 +406,18 @@ where
             }
 
             for queue_shifts in collected_queue_shifts {
-                for queue_shift in queue_shifts {}
+                for queue_shift in queue_shifts {
+                    response_sender
+                        .send_queue_position_update(external::QueuePositionUpdateMessage {
+                            user_id: queue_shift.user_id,
+                            update_message: Some(external::QueuePositionUpdate {
+                                product_id,
+                                queue_position: queue_shift.new_queue_position,
+                                acquisition_time: None,
+                            }),
+                        })
+                        .await;
+                }
             }
         } else {
             // User does not exist!
