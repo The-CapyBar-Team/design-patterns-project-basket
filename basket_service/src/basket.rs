@@ -5,7 +5,7 @@ use std::collections::{HashMap, VecDeque};
 
 // TODO: think of replacing VecDeque with HashMap
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 struct UserInfo {
     user_id: UserId,
@@ -178,6 +178,11 @@ impl Basket {
             .get_mut(&product_id)
             .ok_or(RuRequestError::ProductNotFound(product_id, user_id.clone()))?;
 
+        println!(
+            "debug | RemovalBeginning | holders = {:?}, awaiters = {:?}",
+            product_context.product_holders, product_context.product_awaiters
+        );
+
         let removed_user_info =
             if let Some(found_index) = product_context
                 .product_holders
@@ -226,6 +231,11 @@ impl Basket {
 
             queue_shifts
         };
+
+        println!(
+            "debug | RemovalEnding | holders = {:?}, awaiters = {:?}",
+            product_context.product_holders, product_context.product_awaiters
+        );
 
         Ok(HaRemovalResult {
             removed_user_id: removed_user_info.user_id,
