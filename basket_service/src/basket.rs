@@ -206,6 +206,7 @@ impl Basket {
 
         let queue_shifts = if let Some(removed_awaiter_position) = removed_user_info.queue_position
         {
+            // Awaiter removed
             let queue_shifts =
                 Self::shift_queue_positions(product_context, removed_awaiter_position, 1);
             queue_shifts
@@ -311,7 +312,7 @@ impl Basket {
         for awaiter_info in product_context.product_awaiters.iter_mut() {
             // TODO: add better overflow protection!
             if let Some(queue_position) = awaiter_info.queue_position.as_mut() {
-                if max_removed_queue_position <= max_removed_queue_position {
+                if *queue_position <= max_removed_queue_position {
                     continue;
                 }
 
