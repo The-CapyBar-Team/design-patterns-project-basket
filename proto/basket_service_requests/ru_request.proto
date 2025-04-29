@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package ru_request;
+
+enum FailureStatus {
+    USER_NOT_FOUND = 0;
+    PRODUCT_NOT_FOUND = 1;
+    LOGGED_INTERNALLY_ERROR = 2;
+}
+
+message Request {
+  string user_id = 1;
+  int32 product_id = 2;
+}
+
+message Response {
+  oneof response {
+    Success success = 1;
+    Failure failure = 2;
+  }
+}
+
+message QueueShift {
+  string user_id = 1;
+  optional uint32 new_queue_position = 2;
+}
+
+message Success {
+  string removed_user_id = 1;
+  optional uint32 removed_user_queue_position = 2;
+  repeated QueueShift queue_shifts = 3;
+}
+
+message Failure {
+  FailureStatus status = 2;
+}

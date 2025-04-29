@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+option csharp_namespace = "AllProductsService.Protos";
+package external;
+
+message ProductProto {
+  int32 id = 1;
+  string name = 2;
+  string description = 3;
+  float price = 4;
+  uint32 stock = 5;
+}
+
+// AllProductsService -> BasketLoadBalancer
+message ProductStockList {
+  repeated ProductStockInfo products = 1;
+}
+
+// AllProductsService -> BasketLoadBalancer (when the stock of product has changed)
+message ProductStockInfo {
+	int32 productId = 1;
+	uint32 stockChange = 2;
+}
+
+// AllProductsService -> APIGateway
+message AllProductsResponse {
+	string requestId = 1;
+	repeated ProductProto products = 2;
+}
+
+// APIGateway -> AllProductsService
+message AllProductsRequest {
+	string requestId = 1;
+}
+
+// APIGateway -> BasketLoadBalancer
+message AddToCartRequest {
+	string userId = 1;
+	int32 productId = 2;
+}
+
+// APIGateway -> BasketLoadBalancer
+message RemoveFromCartRequest {
+	string userId = 1;
+	int32 productId = 2;
+}
+
+// BasketLoadBalancer -> APIGateway (when queue position is changed in the basketService and we need to noify the user)
+message QueuePositionUpdateMessage {
+	string userId = 1;
+	QueuePositionUpdate updateMessage = 2;
+}
+
+// BasketLoadBalancer -> APIGateway (when timer of product holding has run out and we need to noify the user)
+message LostProduct {
+	string userId = 1;
+	int32 productId = 2;
+}
+
+// APIGateway -> BasketLoadBalancer (when user wants to check the status of the product)
+message ProductStatusRequest {
+	string userId = 1;
+}
+
+// BasketLoadBalancer -> APIGateway (when product status has been updated while user was away)
+message ProductStatusUpdate {
+	string userId = 1;
+	repeated QueuePositionUpdate newQueuePositions = 2;
+}
+
+message QueuePositionUpdate {
+	int32 productId = 1;
+	optional uint32 queuePosition = 2;
+	optional int64 acquisitionTime = 3;
+}
+
+// APIGateway -> BasketLoadBalancer
+message BuyProductRequest {
+	string userId = 1;
+	int32 productId = 2;
+}
+
+// BasketLoadBalancer -> AllProductsService (when we want to decrease the stock in DB after purchase)
+message DecreaseStockRequest {
+	string userId = 1;
+	int32 productId = 2;
+}

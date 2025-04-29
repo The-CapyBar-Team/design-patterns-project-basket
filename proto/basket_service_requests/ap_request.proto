@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package ap_request;
+
+enum FailureStatus {
+    PRODUCT_NOT_FOUND = 0;
+    USER_ALREADY_ADDED = 1;
+    LOGGED_INTERNALLY_ERROR = 2;
+}
+
+message Request {
+  string user_id = 1;
+  int32 product_id = 2;
+  uint32 queue_position = 3;
+}
+
+message Response {
+  oneof response {
+    Success success = 1;
+    Failure failure = 2;
+  }
+}
+
+message Success {
+  string user_id = 1;
+  int32 product_id = 2;
+  uint32 queue_position = 3; // return queue_position to send it in a response to client
+}
+
+message Failure {
+  FailureStatus status = 1;
+}

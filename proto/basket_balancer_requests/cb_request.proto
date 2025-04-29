@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package cb_request;
+
+enum ConnectionStatus {
+  CONNECTION_SUCCESS = 0;
+  CONNECTION_POOL_IS_FULL = 1;
+  ALREADY_CONNECTED = 2;
+  INTERNAL_ERROR = 3;
+  INVALID_BASKET_ID = 4;
+}
+
+message Request {
+  string uri = 1;
+  uint32 basket_id = 2;
+}
+
+message Response {
+  optional string error_message = 1;
+  ConnectionStatus status = 2;
+}

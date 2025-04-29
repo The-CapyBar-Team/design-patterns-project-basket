@@ -5,6 +5,10 @@ edition = "2024"
 
 [dependencies]
 prost = "0.13.5"
+tonic = "0.13.0"
+lapin = "2.5.3"
+futures = "0.3.31"
+thiserror = "2.0.12"
 
 [build-dependencies]
-prost-build = "0.13.5"
+tonic-build = "0.13.0"

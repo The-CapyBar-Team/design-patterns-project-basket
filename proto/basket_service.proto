@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package basket_service;
+
+import "basket_service_requests/ups_request.proto";
+import "basket_service_requests/hp_request.proto";
+import "basket_service_requests/ap_request.proto";
+import "basket_service_requests/ru_request.proto";
+import "basket_service_requests/sq_request.proto";
+
+service BasketService {
+  rpc perform_ups (ups_request.Request) returns (ups_request.Response);
+  rpc perform_hp (hp_request.Request) returns (hp_request.Response);
+  rpc perform_ap (ap_request.Request) returns (ap_request.Response);
+  rpc perform_ru (ru_request.Request) returns (ru_request.Response);
+  rpc perform_sq (sq_request.Request) returns (sq_request.Response);
+}

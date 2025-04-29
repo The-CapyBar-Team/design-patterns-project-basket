@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package ups_request;
+
+message Request {
+  int32 product_id = 1;
+  uint32 product_stock_increase = 2;
+}
+
+message Response {
+  uint32 queue_shift = 1;
+}

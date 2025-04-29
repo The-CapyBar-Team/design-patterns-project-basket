@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package sq_request;
+
+enum FailureStatus {
+    PRODUCT_NOT_FOUND = 0;
+}
+
+message Request {
+  int32 product_id = 1;
+  uint32 max_removed_queue_position = 2;
+  uint32 shift = 3;
+}
+
+message Response {
+  oneof response {
+    Success success = 1;
+    Failure failure = 2;
+  }
+}
+
+message QueueShift {
+  string user_id = 1;
+  optional uint32 new_queue_position = 2;
+}
+
+message Success {
+  repeated QueueShift queue_shifts = 2;
+}
+
+message Failure {
+  FailureStatus status = 2;
+}

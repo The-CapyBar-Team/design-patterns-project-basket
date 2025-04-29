@@ -1,13 +1,15 @@
 [package]
-name = "basket_balancer"
+name = "rabbit_test"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-basket_communication = { path = "../basket_communication" }
-tokio = { version = "1.44.2", features = ["full"] }
-rand = "0.9.1"
-thiserror = "2.0.12"
-anyhow = "1.0.97"
-tonic = "0.13.0"
 lapin = "2.5.3"
+basket_communication = { path = "../basket_communication" }
+anyhow = "1.0.97"
+futures = "0.3.31"
+tokio = { version = "1.44.2", features = ["full"] }
+prost = "0.13.5"
+thiserror = "2.0.12"
+tonic = "0.13.0"
+num = "0.4.3"
