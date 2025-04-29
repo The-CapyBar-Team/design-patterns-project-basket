@@ -1,4 +1,4 @@
-use crate::error::{ApRequestError, HpRequestError};
+use crate::error::{ApRequestError, HpRequestError, RemovalError};
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
 use std::collections::{HashMap, VecDeque};
 
@@ -15,6 +15,21 @@ struct ProductContext {
     product_holders: VecDeque<UserInfo>,
     product_awaiters: VecDeque<UserInfo>,
     product_stock: ProductStock,
+}
+
+struct FillAvailableHolderSlotResult {
+    new_holder_id: UserId,
+    its_old_queue_position: QueuePosition,
+}
+
+pub(crate) struct QueueShift {
+    user_id: UserId,
+    new_queue_position: Option<QueuePosition>,
+}
+
+pub(crate) struct HaRemovalResult {
+    removed_user_id: UserId,
+    queue_shifts: Box<[QueueShift]>,
 }
 
 pub(crate) struct Basket {
@@ -156,55 +171,122 @@ impl Basket {
     // TODO: add decreasing of queue position to be done within this function
     // so that encapsulation is adhered to
     #[inline(always)]
-    pub(crate) fn remove_holder_of_product(
+    pub(crate) fn remove_holder_or_awaiter_of_product(
         &mut self,
         product_id: ProductId,
         user_id: UserId,
-    ) -> Result<UserId, HpRequestError> {
+    ) -> Result<HaRemovalResult, RemovalError> {
         let product_context = self
             .product_to_context
             .get_mut(&product_id)
-            .ok_or(HpRequestError::ProductNotFound(product_id, user_id.clone()))?;
+            .ok_or(RemovalError::ProductNotFound(product_id, user_id.clone()))?;
 
-        if let Some(found_index) = product_context
-            .product_holders
-            .iter()
-            .position(|info| info.user_id == user_id)
+        let removed_user_info =
+            if let Some(found_index) = product_context
+                .product_holders
+                .iter()
+                .position(|info| info.user_id == user_id)
+            {
+                product_context
+                    .product_holders
+                    .remove(found_index)
+                    .ok_or(RemovalError::DebugError(
+                        "The found holder should be present".to_owned(),
+                    ))
+            } else if let Some(found_index) = product_context
+                .product_awaiters
+                .iter()
+                .position(|info| info.user_id == user_id)
+            {
+                product_context.product_awaiters.remove(found_index).ok_or(
+                    RemovalError::DebugError("The found awaiter should be present".to_owned()),
+                )
+            } else {
+                Err(RemovalError::ProductNotFound(product_id, user_id.clone()))
+            }?;
+
+        let queue_shifts = if let Some(removed_awaiter_position) = removed_user_info.queue_position
         {
-            product_context.product_holders.remove(found_index);
-            Ok(())
+            let queue_shifts =
+                Self::shift_queue_positions(product_context, removed_awaiter_position, 1);
+            queue_shifts.into_boxed_slice()
         } else {
-            Err(HpRequestError::ProductNotFound(product_id, user_id))
-        }?;
+            // Holder removed
+            let queue_shifts = if let Some(FillAvailableHolderSlotResult {
+                new_holder_id,
+                its_old_queue_position,
+            }) =
+                Self::fill_available_holder_slot(product_id, user_id, product_context)?
+            {
+                let mut queue_shifts =
+                    Self::shift_queue_positions(product_context, its_old_queue_position, 1);
+                queue_shifts.push(QueueShift {
+                    user_id: new_holder_id,
+                    new_queue_position: None,
+                });
 
-        let new_holder = Self::fill_available_holder_slots(product_context);
-        debug_assert!(new_holder.len() == 1);
-        Ok(new_holder.first().unwrap().clone())
+                queue_shifts.into_boxed_slice()
+            } else {
+                Box::default()
+            };
+
+            queue_shifts
+        };
+
+        Ok(HaRemovalResult {
+            removed_user_id: removed_user_info.user_id,
+            queue_shifts,
+        })
     }
 
     // TODO: we could optimize this by providing the function that returns a single element
     // if we know that we have only one free slot (prevent vec allocation)
     #[inline(always)]
-    fn fill_available_holder_slots(product_context: &mut ProductContext) -> Vec<UserId> {
-        debug_assert!(
-            product_context.product_stock as usize >= product_context.product_holders.len()
-        );
-
-        let free_slots_count =
-            product_context.product_stock as usize - product_context.product_holders.len();
-        let mut new_holders_ids = Vec::with_capacity(free_slots_count);
-
-        for _ in 0..free_slots_count {
-            let new_holder_id = product_context
-                .product_awaiters
-                .pop_front()
-                .map(|new_holder| {
-                    new_holders_ids.push(new_holder.user_id.clone());
-                    product_context.product_holders.push_back(new_holder);
-                });
+    fn fill_available_holder_slot(
+        product_id: ProductId,
+        user_id: UserId,
+        product_context: &mut ProductContext,
+    ) -> Result<Option<FillAvailableHolderSlotResult>, RemovalError> {
+        #[cfg(feature = "extra_protection")]
+        if !Self::can_hold(product_context) {
+            return Err(RemovalError::UnableToDequeueAwaiter(product_id));
         }
 
-        new_holders_ids
+        let old_awaiter_info = product_context
+            .product_awaiters
+            .pop_front()
+            .map(|info| UserInfo {
+                user_id: info.user_id,
+                queue_position: None,
+            });
+
+        let old_awaiter_info = if let Some(old_awaiter_info) = old_awaiter_info {
+            let new_holder_info = old_awaiter_info.clone();
+            product_context.product_holders.push_back(new_holder_info);
+            Some(old_awaiter_info)
+        } else {
+            None
+        };
+
+        if let Some(old_awaiter_info) = old_awaiter_info {
+            Ok(Some(FillAvailableHolderSlotResult {
+                new_holder_id: old_awaiter_info.user_id,
+                its_old_queue_position: old_awaiter_info.queue_position.ok_or(
+                    RemovalError::DebugError("The found awaiter should be present".to_owned()),
+                )?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    #[inline(always)]
+    fn shift_queue_positions(
+        product_context: &mut ProductContext,
+        max_removed_queue_position: QueuePosition,
+        shift: QueuePosition,
+    ) -> Vec<QueueShift> {
+        todo!()
     }
 
     #[cfg(test)]

@@ -36,6 +36,24 @@ pub(crate) enum ApRequestError {
     QueuePositionIsIncorrect(ProductId, UserId, QueuePosition),
 }
 
+#[derive(Error, Debug, PartialEq, Eq)]
+pub(crate) enum RemovalError {
+    #[error("[UserId='`{1}`'] Product with id '`{0}`' is not available")]
+    ProductNotFound(ProductId, UserId),
+
+    #[error("Unable to remove user with id '{0}', as it is not present in the basket")]
+    UserNotFound(UserId),
+
+    #[error("Removal DebugError: {0}")]
+    DebugError(String),
+
+    #[cfg(feature = "extra_protection")]
+    #[error(
+        "Trying to make holders of some awaiters for product with id {0} when holders list is full"
+    )]
+    UnableToDequeueAwaiter(ProductId),
+}
+
 pub(crate) struct LocallyLoggedError<Error> {
     pub(crate) error: Error,
 }
@@ -61,6 +79,8 @@ pub(crate) fn ap_request_error_to_status(
         ApRequestError::ProductNotFound(_, _) => Ok(ProtoStatus::ProductNotFound),
         ApRequestError::UserAlreadyAdded(_, _) => Ok(ProtoStatus::UserAlreadyAdded),
         ApRequestError::PrematureAwait(_, _) => Err(LocallyLoggedError { error }),
+
+        #[cfg(feature = "extra_protection")]
         ApRequestError::QueuePositionIsIncorrect(_, _, _) => Err(LocallyLoggedError { error }),
     }
 }
