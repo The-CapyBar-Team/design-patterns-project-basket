@@ -1,4 +1,4 @@
-use basket_communication::basket_service::{ap_request, hp_request};
+use basket_communication::basket_service::{ap_request, hp_request, ru_request};
 use basket_communication::types::{ProductId, QueuePosition, UserId};
 use thiserror::Error;
 
@@ -37,12 +37,14 @@ pub(crate) enum ApRequestError {
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
-pub(crate) enum RemovalError {
+pub(crate) enum RuRequestError {
     #[error("[UserId='`{1}`'] Product with id '`{0}`' is not available")]
     ProductNotFound(ProductId, UserId),
 
-    #[error("Unable to remove user with id '{0}', as it is not present in the basket")]
-    UserNotFound(UserId),
+    #[error(
+        "Unable to remove user with id '{1}', as it is not present in the basket at product '{0}'"
+    )]
+    UserNotFound(ProductId, UserId),
 
     #[error("Removal DebugError: {0}")]
     DebugError(String),
@@ -82,5 +84,21 @@ pub(crate) fn ap_request_error_to_status(
 
         #[cfg(feature = "extra_protection")]
         ApRequestError::QueuePositionIsIncorrect(_, _, _) => Err(LocallyLoggedError { error }),
+    }
+}
+
+#[inline(always)]
+pub(crate) fn ru_request_error_to_status(
+    error: RuRequestError,
+) -> Result<ru_request::FailureStatus, LocallyLoggedError<RuRequestError>> {
+    use ru_request::FailureStatus as ProtoStatus;
+
+    match error {
+        RuRequestError::ProductNotFound(_, _) => Ok(ProtoStatus::ProductNotFound),
+        RuRequestError::UserNotFound(_, _) => Ok(ProtoStatus::UserNotFound),
+        RuRequestError::DebugError(_) => Err(LocallyLoggedError { error }),
+
+        #[cfg(feature = "extra_protection")]
+        RuRequestError::UnableToDequeueAwaiter(_) => Err(LocallyLoggedError { error }),
     }
 }

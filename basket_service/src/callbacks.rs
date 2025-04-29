@@ -1,7 +1,10 @@
-use crate::basket::Basket;
-use crate::error::{ap_request_error_to_status, hp_request_error_to_status, LocallyLoggedError};
+use crate::basket::*;
+use crate::error::{
+    ap_request_error_to_status, hp_request_error_to_status, ru_request_error_to_status,
+    LocallyLoggedError,
+};
 use basket_communication::basket_service::basket_service_server;
-use basket_communication::basket_service::{ap_request, hp_request, ups_request};
+use basket_communication::basket_service::{ap_request, hp_request, ru_request, ups_request};
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
 
@@ -120,11 +123,65 @@ impl basket_service_server::BasketService for BasketContext {
                 })),
             },
             Err(Err(LocallyLoggedError { error })) => {
-                eprintln!("!<>! | basket_service | locally logged error | {}", error);
+                eprintln!(
+                    "!<>! | basket_service | AP | locally logged error | {}",
+                    error
+                );
 
                 ap_request::Response {
                     response: Some(Failure(ap_request::Failure {
                         status: ap_request::FailureStatus::LoggedInternallyError.into(),
+                    })),
+                }
+            }
+        };
+
+        Ok(Response::new(response))
+    }
+
+    #[inline(always)]
+    async fn perform_ru(
+        &self,
+        request: Request<ru_request::Request>,
+    ) -> Result<Response<ru_request::Response>, Status> {
+        use ru_request::response::Response::Failure;
+        use ru_request::response::Response::Success;
+
+        let ru_request::Request {
+            user_id,
+            product_id,
+        } = request.into_inner();
+
+        let mut basket = self.basket.lock().await;
+        let removal_result = basket.remove_holder_or_awaiter_of_product(product_id, user_id);
+        drop(basket);
+
+        let response = match removal_result.map_err(ru_request_error_to_status) {
+            Ok(HaRemovalResult {
+                removed_user_id,
+                queue_shifts,
+            }) => ru_request::Response {
+                response: Some(Success(ru_request::Success {
+                    removed_user_id,
+                    queue_shifts,
+                })),
+            },
+
+            Err(Ok(status)) => ru_request::Response {
+                response: Some(Failure(ru_request::Failure {
+                    status: status.into(),
+                })),
+            },
+
+            Err(Err(LocallyLoggedError { error })) => {
+                eprintln!(
+                    "!<>! | basket_service | RU | locally logged error | {}",
+                    error
+                );
+
+                ru_request::Response {
+                    response: Some(Failure(ru_request::Failure {
+                        status: ru_request::FailureStatus::LoggedInternallyError.into(),
                     })),
                 }
             }

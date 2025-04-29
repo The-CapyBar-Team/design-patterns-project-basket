@@ -8,6 +8,7 @@ fn main() {
         "basket_service_requests/hp_request.proto",
         "basket_service_requests/ups_request.proto",
         "basket_service_requests/ap_request.proto",
+        "basket_service_requests/ru_request.proto",
         "basket_balancer_requests/cb_request.proto",
         "basket_service.proto",
         "basket_balancer.proto",

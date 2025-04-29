@@ -1,4 +1,5 @@
-use crate::error::{ApRequestError, HpRequestError, RemovalError};
+use crate::error::{ApRequestError, HpRequestError, RuRequestError};
+use basket_communication::basket_service::ru_request::QueueShift;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
 use std::collections::{HashMap, VecDeque};
 
@@ -22,14 +23,9 @@ struct FillAvailableHolderSlotResult {
     its_old_queue_position: QueuePosition,
 }
 
-pub(crate) struct QueueShift {
-    user_id: UserId,
-    new_queue_position: Option<QueuePosition>,
-}
-
 pub(crate) struct HaRemovalResult {
-    removed_user_id: UserId,
-    queue_shifts: Box<[QueueShift]>,
+    pub(crate) removed_user_id: UserId,
+    pub(crate) queue_shifts: Vec<QueueShift>,
 }
 
 pub(crate) struct Basket {
@@ -175,11 +171,11 @@ impl Basket {
         &mut self,
         product_id: ProductId,
         user_id: UserId,
-    ) -> Result<HaRemovalResult, RemovalError> {
+    ) -> Result<HaRemovalResult, RuRequestError> {
         let product_context = self
             .product_to_context
             .get_mut(&product_id)
-            .ok_or(RemovalError::ProductNotFound(product_id, user_id.clone()))?;
+            .ok_or(RuRequestError::ProductNotFound(product_id, user_id.clone()))?;
 
         let removed_user_info =
             if let Some(found_index) = product_context
@@ -187,36 +183,33 @@ impl Basket {
                 .iter()
                 .position(|info| info.user_id == user_id)
             {
-                product_context
-                    .product_holders
-                    .remove(found_index)
-                    .ok_or(RemovalError::DebugError(
-                        "The found holder should be present".to_owned(),
-                    ))
+                product_context.product_holders.remove(found_index).ok_or(
+                    RuRequestError::DebugError("The found holder should be present".to_owned()),
+                )
             } else if let Some(found_index) = product_context
                 .product_awaiters
                 .iter()
                 .position(|info| info.user_id == user_id)
             {
                 product_context.product_awaiters.remove(found_index).ok_or(
-                    RemovalError::DebugError("The found awaiter should be present".to_owned()),
+                    RuRequestError::DebugError("The found awaiter should be present".to_owned()),
                 )
             } else {
-                Err(RemovalError::ProductNotFound(product_id, user_id.clone()))
+                Err(RuRequestError::UserNotFound(product_id, user_id.clone()))
             }?;
 
         let queue_shifts = if let Some(removed_awaiter_position) = removed_user_info.queue_position
         {
             let queue_shifts =
                 Self::shift_queue_positions(product_context, removed_awaiter_position, 1);
-            queue_shifts.into_boxed_slice()
+            queue_shifts
         } else {
             // Holder removed
             let queue_shifts = if let Some(FillAvailableHolderSlotResult {
                 new_holder_id,
                 its_old_queue_position,
             }) =
-                Self::fill_available_holder_slot(product_id, user_id, product_context)?
+                Self::fill_available_holder_slot(product_id, product_context)?
             {
                 let mut queue_shifts =
                     Self::shift_queue_positions(product_context, its_old_queue_position, 1);
@@ -225,9 +218,9 @@ impl Basket {
                     new_queue_position: None,
                 });
 
-                queue_shifts.into_boxed_slice()
+                queue_shifts
             } else {
-                Box::default()
+                Vec::default()
             };
 
             queue_shifts
@@ -244,12 +237,11 @@ impl Basket {
     #[inline(always)]
     fn fill_available_holder_slot(
         product_id: ProductId,
-        user_id: UserId,
         product_context: &mut ProductContext,
-    ) -> Result<Option<FillAvailableHolderSlotResult>, RemovalError> {
+    ) -> Result<Option<FillAvailableHolderSlotResult>, RuRequestError> {
         #[cfg(feature = "extra_protection")]
         if !Self::can_hold(product_context) {
-            return Err(RemovalError::UnableToDequeueAwaiter(product_id));
+            return Err(RuRequestError::UnableToDequeueAwaiter(product_id));
         }
 
         let old_awaiter_info = product_context
@@ -272,7 +264,7 @@ impl Basket {
             Ok(Some(FillAvailableHolderSlotResult {
                 new_holder_id: old_awaiter_info.user_id,
                 its_old_queue_position: old_awaiter_info.queue_position.ok_or(
-                    RemovalError::DebugError("The found awaiter should be present".to_owned()),
+                    RuRequestError::DebugError("The found awaiter should be present".to_owned()),
                 )?,
             }))
         } else {
@@ -281,12 +273,48 @@ impl Basket {
     }
 
     #[inline(always)]
+    fn shift_queue_positions_of_product(
+        &mut self,
+        product_id: ProductId,
+        max_removed_queue_position: QueuePosition,
+        shift: QueuePosition,
+    ) -> Option<Vec<QueueShift>> {
+        let product_context = self.product_to_context.get_mut(&product_id)?;
+        Some(Self::shift_queue_positions(
+            product_context,
+            max_removed_queue_position,
+            shift,
+        ))
+    }
+
+    #[inline(always)]
     fn shift_queue_positions(
         product_context: &mut ProductContext,
         max_removed_queue_position: QueuePosition,
         shift: QueuePosition,
     ) -> Vec<QueueShift> {
-        todo!()
+        let mut queue_shifts = Vec::new();
+
+        // TODO: turn deque into slice and use partition_point (lower_bound)
+        for awaiter_info in product_context.product_awaiters.iter_mut() {
+            // TODO: add better overflow protection!
+            if let Some(queue_position) = awaiter_info.queue_position.as_mut() {
+                if max_removed_queue_position <= max_removed_queue_position {
+                    continue;
+                }
+
+                if let Some(new_queue_position) = queue_position.checked_sub(shift) {
+                    *queue_position = new_queue_position;
+
+                    queue_shifts.push(QueueShift {
+                        user_id: awaiter_info.user_id.clone(),
+                        new_queue_position: Some(new_queue_position),
+                    });
+                }
+            }
+        }
+
+        queue_shifts
     }
 
     #[cfg(test)]
