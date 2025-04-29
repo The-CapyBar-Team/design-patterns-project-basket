@@ -64,7 +64,8 @@ impl BasketBalancer for VecBalancingSet {
             None
         } else {
             let mut rng = rand::thread_rng();
-            Some(rng.gen_range(0..self.available_baskets.len()) as u8)
+            let ndx = rng.gen_range(0..self.available_baskets.len());
+            Some(self.available_baskets[rng.gen_range(0..self.available_baskets.len())])
         }
     }
 
