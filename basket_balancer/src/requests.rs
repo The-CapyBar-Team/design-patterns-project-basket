@@ -1,6 +1,8 @@
 use crate::basket_pool::basket_pool::ProtectedBasketPool;
 use crate::types::BasketId;
-use basket_communication::basket_service::{ap_request, hp_request, ups_request};
+use basket_communication::basket_service::{
+    ap_request, hp_request, ru_request, sq_request, ups_request,
+};
 use std::sync::Arc;
 
 pub(crate) enum GrpcFailure<CustomError> {
@@ -29,6 +31,18 @@ pub(crate) trait RequestSender {
         basket_id: BasketId,
         request: ap_request::Request,
     ) -> Result<ap_request::Success, GrpcFailure<ap_request::Failure>>;
+
+    async fn perform_ru_request(
+        &mut self,
+        basket_id: BasketId,
+        request: ru_request::Request,
+    ) -> Result<ru_request::Success, GrpcFailure<ru_request::Failure>>;
+
+    async fn perform_sq_request(
+        &mut self,
+        basket_id: BasketId,
+        request: sq_request::Request,
+    ) -> Result<sq_request::Success, GrpcFailure<sq_request::Failure>>;
 }
 
 pub(crate) struct BasicRequestSender<BasketSet>
@@ -106,6 +120,7 @@ where
             let channel = basket_pool
                 .get_mut_basket_channel(basket_id)
                 .ok_or(GrpcFailure::Internal)?;
+
             channel
                 .perform_ap(request)
                 .await
@@ -115,6 +130,60 @@ where
         match response {
             Ok(Some(Success(ap_success))) => Ok(ap_success),
             Ok(Some(Failure(ap_failure))) => Err(GrpcFailure::Custom(ap_failure)),
+            Ok(None) | Err(_) => Err(GrpcFailure::Internal),
+        }
+    }
+
+    async fn perform_ru_request(
+        &mut self,
+        basket_id: BasketId,
+        request: ru_request::Request,
+    ) -> Result<ru_request::Success, GrpcFailure<ru_request::Failure>> {
+        use ru_request::response::Response::Failure;
+        use ru_request::response::Response::Success;
+
+        let response = {
+            let mut basket_pool = self.basket_pool.basket_pool.lock().await;
+            let channel = basket_pool
+                .get_mut_basket_channel(basket_id)
+                .ok_or(GrpcFailure::Internal)?;
+
+            channel
+                .perform_ru(request)
+                .await
+                .map(|response| response.into_inner().response)
+        };
+
+        match response {
+            Ok(Some(Success(ru_success))) => Ok(ru_success),
+            Ok(Some(Failure(ru_failure))) => Err(GrpcFailure::Custom(ru_failure)),
+            Ok(None) | Err(_) => Err(GrpcFailure::Internal),
+        }
+    }
+
+    async fn perform_sq_request(
+        &mut self,
+        basket_id: BasketId,
+        request: sq_request::Request,
+    ) -> Result<sq_request::Success, GrpcFailure<sq_request::Failure>> {
+        use sq_request::response::Response::Failure;
+        use sq_request::response::Response::Success;
+
+        let response = {
+            let mut basket_pool = self.basket_pool.basket_pool.lock().await;
+            let channel = basket_pool
+                .get_mut_basket_channel(basket_id)
+                .ok_or(GrpcFailure::Internal)?;
+
+            channel
+                .perform_sq(request)
+                .await
+                .map(|response| response.into_inner().response)
+        };
+
+        match response {
+            Ok(Some(Success(sq_success))) => Ok(sq_success),
+            Ok(Some(Failure(sq_failure))) => Err(GrpcFailure::Custom(sq_failure)),
             Ok(None) | Err(_) => Err(GrpcFailure::Internal),
         }
     }

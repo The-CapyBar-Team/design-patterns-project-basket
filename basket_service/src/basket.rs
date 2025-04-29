@@ -25,6 +25,7 @@ struct FillAvailableHolderSlotResult {
 
 pub(crate) struct HaRemovalResult {
     pub(crate) removed_user_id: UserId,
+    pub(crate) removed_user_queue_position: Option<QueuePosition>,
     pub(crate) queue_shifts: Vec<QueueShift>,
 }
 
@@ -228,6 +229,7 @@ impl Basket {
 
         Ok(HaRemovalResult {
             removed_user_id: removed_user_info.user_id,
+            removed_user_queue_position: removed_user_info.queue_position,
             queue_shifts,
         })
     }

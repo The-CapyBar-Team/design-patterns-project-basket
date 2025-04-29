@@ -45,13 +45,13 @@ impl BasketSet for VecBalancingSet {
     }
 
     #[inline(always)]
-    fn is_empty(&self) -> bool {
-        self.available_baskets.is_empty()
+    fn is_full(&self) -> bool {
+        self.available_baskets.len() >= MAX_BASKETS_COUNT.into()
     }
 
     #[inline(always)]
-    fn is_full(&self) -> bool {
-        self.available_baskets.len() >= MAX_BASKETS_COUNT.into()
+    fn present_basket_ids(&self) -> Vec<BasketId> {
+        self.available_baskets.clone()
     }
 }
 

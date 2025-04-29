@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 #[inline(always)]
 pub(crate) async fn listener<RequestSender, BasketBalancer>(
     rabbit_connection_string: String,
-    _balancing_table: Arc<Mutex<BalancingTable<RequestSender, BasketBalancer>>>,
+    balancing_table: Arc<Mutex<BalancingTable<RequestSender, BasketBalancer>>>,
 ) where
     RequestSender: requests::RequestSender + Send,
     BasketBalancer: Default
@@ -29,9 +29,20 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
 
     wait_until_basket_is_ready().await;
 
+    let balancing_table = balancing_table.clone();
+
     ups_rabbit_listener
-        .listen_to_messages(async |message| {
-            println!("Rabbit | RemoveFromCartRequest: {:?}", message);
-        })
+        .listen_to_messages(
+            async move |RemoveFromCartRequest {
+                            user_id,
+                            product_id,
+                        }| {
+                balancing_table
+                    .lock()
+                    .await
+                    .remove_product_from_basket(product_id, user_id)
+                    .await;
+            },
+        )
         .await;
 }

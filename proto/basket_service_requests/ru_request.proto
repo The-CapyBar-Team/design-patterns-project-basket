@@ -27,7 +27,8 @@ message QueueShift {
 
 message Success {
   string removed_user_id = 1;
-  repeated QueueShift queue_shifts = 2;
+  optional uint32 removed_user_queue_position = 2;
+  repeated QueueShift queue_shifts = 3;
 }
 
 message Failure {

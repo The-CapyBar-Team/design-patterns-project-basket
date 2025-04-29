@@ -161,10 +161,12 @@ impl basket_service_server::BasketService for BasketContext {
         let response = match removal_result.map_err(ru_request_error_to_status) {
             Ok(HaRemovalResult {
                 removed_user_id,
+                removed_user_queue_position,
                 queue_shifts,
             }) => ru_request::Response {
                 response: Some(Success(ru_request::Success {
                     removed_user_id,
+                    removed_user_queue_position,
                     queue_shifts,
                 })),
             },
