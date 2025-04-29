@@ -1,6 +1,5 @@
 use super::error::BalancerError;
 use super::response_sender::ResponseSender;
-use crate::basket_pool;
 use crate::basket_pool::basket_pool::ProtectedBasketPool;
 use crate::basket_set::MAX_BASKETS_COUNT;
 use crate::requests::{self, GrpcFailure};
@@ -432,6 +431,22 @@ where
                 user_id
             );
         }
+    }
+
+    #[inline(always)]
+    pub(crate) async fn send_decrease_stock_request(
+        &mut self,
+        product_id: ProductId,
+        user_id: UserId,
+    ) {
+        self.response_sender
+            .lock()
+            .await
+            .send_decrease_stock_request(external::DecreaseStockRequest {
+                user_id,
+                product_id,
+            })
+            .await;
     }
 
     #[inline(always)]
