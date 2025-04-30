@@ -270,7 +270,12 @@ where
         &mut self,
         product_id: ProductId,
         user_id: UserId,
-    ) {
+    ) -> Result<(), BalancerError> {
+        let mut binding = self.products_to_balancing_info.lock().await;
+        let balancing_info = binding
+            .get_mut(&product_id)
+            .ok_or(BalancerError::ProductNotFound(product_id, user_id.clone()))?;
+
         let present_basket_ids = self
             .basket_pool
             .basket_pool
@@ -475,6 +480,9 @@ where
                 }
             }
 
+            balancing_info.queue_size =
+                balancing_info.queue_size.checked_sub(1).unwrap_or_default();
+
             let mut response_sender = self.response_sender.lock().await;
 
             for queue_shift in queue_shifts {
@@ -511,6 +519,8 @@ where
                 user_id
             );
         }
+
+        Ok(())
     }
 
     #[inline(always)]
