@@ -289,9 +289,9 @@ impl Basket {
         //     queue_position: None,
         // });
 
-        let old_awaiter_info = if let Some(old_awaiter_info) = old_awaiter_info {
-            let mut new_holder_info = old_awaiter_info.clone();
-            new_holder_info.queue_position = old_queue_position;
+        let old_awaiter_info = if let Some(mut old_awaiter_info) = old_awaiter_info {
+            let new_holder_info = old_awaiter_info.clone();
+            old_awaiter_info.queue_position = old_queue_position;
             product_context.product_holders.push_back(new_holder_info);
             Some(old_awaiter_info)
         } else {
