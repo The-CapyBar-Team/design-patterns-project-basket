@@ -278,16 +278,20 @@ impl Basket {
             return Err(RuRequestError::UnableToDequeueAwaiter(product_id));
         }
 
-        let old_awaiter_info = product_context
-            .product_awaiters
-            .pop_front()
-            .map(|info| UserInfo {
-                user_id: info.user_id,
-                queue_position: None,
-            });
+        let mut old_awaiter_info = product_context.product_awaiters.pop_front();
+        let old_queue_position = if let Some(old_awaiter_info) = old_awaiter_info.as_mut() {
+            old_awaiter_info.queue_position.take()
+        } else {
+            None
+        };
+        // old_awaiter_info.map(|info| UserInfo {
+        //     user_id: info.user_id,
+        //     queue_position: None,
+        // });
 
         let old_awaiter_info = if let Some(old_awaiter_info) = old_awaiter_info {
-            let new_holder_info = old_awaiter_info.clone();
+            let mut new_holder_info = old_awaiter_info.clone();
+            new_holder_info.queue_position = old_queue_position;
             product_context.product_holders.push_back(new_holder_info);
             Some(old_awaiter_info)
         } else {
