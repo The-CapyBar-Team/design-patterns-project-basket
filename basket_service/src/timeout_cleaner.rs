@@ -9,8 +9,11 @@ use tokio::time::{interval, Duration};
 pub(crate) async fn timeout_cleaner(basket: Arc<Mutex<Basket>>) {
     let mut ticker = interval(Duration::from_secs(1));
     let mut eh_sender = retry_and_report_error(async move || {
-        RabbitSender::<eh_request::Request>::new("amqp://guest:guest@rabbitmq:5672", "ExpiredHolders")
-            .await
+        RabbitSender::<eh_request::Request>::new(
+            "amqp://guest:guest@rabbitmq:5672",
+            "ExpiredHolders",
+        )
+        .await
     })
     .await;
 

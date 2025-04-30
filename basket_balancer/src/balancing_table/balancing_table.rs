@@ -368,6 +368,7 @@ where
         let mut queue_shift_list = Vec::new();
         let mut force_remove_occured = false;
         let holder_was_removed = removed_user_queue_position.is_none();
+        let mut force_removed_queue_shift = None;
 
         for &basket_id in present_basket_ids.iter() {
             let sq_response = request_sender
@@ -395,11 +396,6 @@ where
             {
                 force_remove_occured = true;
 
-                queue_shifts.push(sq_request::QueueShift {
-                    user_id: user_id.clone(),
-                    new_queue_position: None,
-                });
-
                 let hp_response = request_sender
                     .perform_hp_request(
                         remover_basket_id,
@@ -411,7 +407,19 @@ where
                     .await;
 
                 match hp_response {
-                    Ok(_) => {
+                    Ok(hp_request::Success {
+                        user_id,
+                        product_id,
+                        acquisition_time,
+                    }) => {
+                        force_removed_queue_shift = Some((
+                            acquisition_time,
+                            sq_request::QueueShift {
+                                user_id: user_id.clone(),
+                                new_queue_position: None,
+                            },
+                        ));
+
                         balancing_info
                             .basket_balancer
                             .remove_basket_id(remover_basket_id);
@@ -443,15 +451,35 @@ where
         balancing_info.queue_size = balancing_info.queue_size.checked_sub(1).unwrap_or_default();
         drop(binding);
 
+        let mut response_sender = self.response_sender.lock().await;
+
+        if let Some((
+            acquisition_time,
+            sq_request::QueueShift {
+                user_id,
+                new_queue_position,
+            },
+        )) = force_removed_queue_shift
+        {
+            response_sender
+                .send_queue_position_update(external::QueuePositionUpdateMessage {
+                    user_id,
+                    update_message: Some(external::QueuePositionUpdate {
+                        product_id,
+                        queue_position: new_queue_position,
+                        acquisition_time: Some(acquisition_time),
+                    }),
+                })
+                .await;
+        }
+
         for queue_shifts in queue_shift_list {
             for sq_request::QueueShift {
                 user_id,
                 new_queue_position,
             } in queue_shifts
             {
-                self.response_sender
-                    .lock()
-                    .await
+                response_sender
                     .send_queue_position_update(external::QueuePositionUpdateMessage {
                         user_id,
                         update_message: Some(external::QueuePositionUpdate {
