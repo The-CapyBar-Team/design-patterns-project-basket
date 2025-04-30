@@ -280,12 +280,16 @@ impl Basket {
             let (product_holders, _) = product_context.product_holders.as_slices();
 
             for product_holder in product_holders {
+                println!("debug | check for expiration | {:?}", product_holder);
                 if current_ts
                     < product_holder.created_at_ts.unwrap_or(Timestamp::MAX)
                         + EXPIRATION_TIME_SECONDS
                 {
+                    println!("debug | not expired, stopping | {:?}", product_holder);
                     break;
                 }
+
+                println!("debug | expired | {:?}", product_holder);
 
                 expired_holders.push(eh_request::ExpiredHolder {
                     product_id,
