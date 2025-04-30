@@ -247,7 +247,7 @@ where
                         update_message: Some(external::QueuePositionUpdate {
                             product_id,
                             queue_position: Some(queue_position),
-                            acquisition_time: Some(0),
+                            acquisition_time: None,
                         }),
                     })
                     .await

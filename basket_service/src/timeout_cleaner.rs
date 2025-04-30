@@ -24,6 +24,10 @@ pub(crate) async fn timeout_cleaner(basket: Arc<Mutex<Basket>>) {
         let expired_holders = basket.get_expired_holders(current_timestamp);
         drop(basket);
 
+        if expired_holders.expired_holders.is_empty() {
+            continue;
+        }
+
         if let Err(err) = eh_sender.send_message(expired_holders).await {
             println!("ERROR SENDING: {}", err);
         }
