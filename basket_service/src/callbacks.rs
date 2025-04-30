@@ -210,12 +210,6 @@ impl basket_service_server::BasketService for BasketContext {
         let mut basket = self.basket.lock().await;
         let shift = 1;
 
-        let shift_result = basket.shift_queue_positions_of_product(
-            product_id,
-            removed_user_queue_position.unwrap_or(0),
-            shift,
-        );
-
         let force_removed_primary_awaiter = if removed_user_queue_position.is_none() {
             println!("debug | SQ | removed holder, so removing primary awaiter and shifting");
             basket
@@ -228,6 +222,12 @@ impl basket_service_server::BasketService for BasketContext {
             println!("debug | SQ | removed awaiter, so just shifting");
             None
         };
+
+        let shift_result = basket.shift_queue_positions_of_product(
+            product_id,
+            removed_user_queue_position.unwrap_or(0),
+            shift,
+        );
 
         drop(basket);
 
