@@ -32,10 +32,6 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
                             user_id,
                             product_id,
                         }| {
-                println!(
-                    "debug | balancer | received AddToCartRequest: user_id = {}, product_id = {}",
-                    user_id, product_id
-                );
                 if let Err(hap_error) = balancing_table
                     .lock()
                     .await

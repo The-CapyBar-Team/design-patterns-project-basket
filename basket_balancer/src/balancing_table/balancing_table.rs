@@ -128,8 +128,6 @@ where
                 .await;
             balancing_info.basket_balancer.choose_next_basket()
         } {
-            println!("LOOP | next_basket_id = {}", next_basket_id);
-
             let hp_response = self
                 .request_sender
                 .lock()
@@ -301,20 +299,20 @@ where
 
             match response {
                 Ok(received_ru_success) => {
-                    println!(
-                        "debug | balancer | ru_request | user removed from basket_id = {}",
-                        basket_id
-                    );
+                    // println!(
+                    //     "debug | balancer | ru_request | user removed from basket_id = {}",
+                    //     basket_id
+                    // );
                     ru_success = Some((basket_id, received_ru_success));
                 }
 
                 Err(GrpcFailure::Custom(ru_request::Failure { status })) => {
                     match ru_request::FailureStatus::from_i32(status) {
                         Some(ru_request::FailureStatus::UserNotFound) => {
-                            println!(
-                                "debug | balancer | ru_request | user not found for basket_id = {}",
-                                basket_id
-                            );
+                            // println!(
+                            //     "debug | balancer | ru_request | user not found for basket_id = {}",
+                            //     basket_id
+                            // );
                         }
                         Some(ru_request::FailureStatus::ProductNotFound) => {
                             println!("!<>! RemoveFromCartRequest | ProductNotFound");
@@ -339,10 +337,10 @@ where
         }
 
         if ru_success.is_none() {
-            println!(
-                "debug | ru_request | user '{}' has been found in no baskets",
-                user_id
-            );
+            // println!(
+            //     "debug | ru_request | user '{}' has been found in no baskets",
+            //     user_id
+            // );
             return Ok(());
         }
 
@@ -375,29 +373,29 @@ where
                 mut queue_shifts,
             } = match sq_response {
                 Ok(sq_success) => {
-                    println!(
-                        "debug | sq_request | received success from basket #{} | {:?}",
-                        basket_id, sq_success
-                    );
+                    // println!(
+                    //     "debug | sq_request | received success from basket #{} | {:?}",
+                    //     basket_id, sq_success
+                    // );
                     sq_success
                 }
                 Err(sq_error) => {
                     println!(
-                        "debug | sq_request | basket_id = {} | {:?}",
+                        "!<>! | sq_request | basket_id = {} | {:?}",
                         basket_id, sq_error
                     );
                     continue;
                 }
             };
 
-            println!("GOING FORWARD BASKET #{}", basket_id);
+            // println!("GOING FORWARD BASKET #{}", basket_id);
 
             if let Some(sq_request::ForceRemovedAwaiter {
                 user_id,
                 product_id,
             }) = force_removed_awaiter
             {
-                println!("debug | sq_request | ForceRemovedAwaiter received");
+                // println!("debug | sq_request | ForceRemovedAwaiter received");
 
                 queue_shifts.push(sq_request::QueueShift {
                     user_id: user_id.clone(),
@@ -416,10 +414,10 @@ where
 
                 match hp_response {
                     Ok(_) => {
-                        println!(
-                            "debug | sq_request | hp_request successful | {:?}",
-                            hp_response
-                        );
+                        // println!(
+                        //     "debug | sq_request | hp_request successful | {:?}",
+                        //     hp_response
+                        // );
                         balancing_info
                             .basket_balancer
                             .remove_basket_id(remover_basket_id);
@@ -440,14 +438,13 @@ where
                     }
                 }
             } else {
-                println!(
-                    "debug | sq_request | no force-removed user found for basket #{}",
-                    basket_id
-                );
+                // println!(
+                //     "debug | sq_request | no force-removed user found for basket #{}",
+                //     basket_id
+                // );
             }
 
             queue_shift_list.push(queue_shifts);
-            println!("PUSHING to queue_shift_list: {:?}", queue_shift_list);
         }
 
         balancing_info.queue_size = balancing_info.queue_size.checked_sub(1).unwrap_or_default();
@@ -459,10 +456,6 @@ where
                 new_queue_position,
             } in queue_shifts
             {
-                println!(
-                    "debug | sending queue shift | user_id = '{}', new_queue_position = {:?}",
-                    user_id, new_queue_position
-                );
                 self.response_sender
                     .lock()
                     .await

@@ -73,6 +73,5 @@ impl BasketBalancer for VecBalancingSet {
     fn intersect(&mut self, other: &Self) {
         self.available_baskets
             .retain(|&basket_id| other.contains(basket_id));
-        println!("INTERSECT | current_list = {:?}", self.available_baskets);
     }
 }

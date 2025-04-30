@@ -172,11 +172,6 @@ impl Basket {
             .get_mut(&product_id)
             .ok_or(RuRequestError::ProductNotFound(product_id, user_id.clone()))?;
 
-        println!(
-            "debug | >RemovalBeginning | holders = {:?}, awaiters = {:?}",
-            product_context.product_holders, product_context.product_awaiters
-        );
-
         let removed_user_info =
             if let Some(found_index) = product_context
                 .product_holders
@@ -197,11 +192,6 @@ impl Basket {
             } else {
                 Err(RuRequestError::UserNotFound(product_id, user_id.clone()))
             }?;
-
-        println!(
-            "debug | <RemovalEnding | holders = {:?}, awaiters = {:?}",
-            product_context.product_holders, product_context.product_awaiters
-        );
 
         Ok(HaRemovalResult {
             removed_user_id: removed_user_info.user_id,
@@ -226,10 +216,6 @@ impl Basket {
 
     pub(crate) fn force_remove_primary_awaiter(&mut self, product_id: ProductId) -> Option<UserId> {
         let product_context = self.product_to_context.get_mut(&product_id)?;
-        println!(
-            "debug | force_remove_primary_awaiter | trying to remove primary awaiter: {:?}",
-            product_context.product_awaiters.front()
-        );
         let front = product_context.product_awaiters.front()?;
 
         if front.queue_position == Some(0) {
@@ -237,11 +223,6 @@ impl Basket {
                 .product_awaiters
                 .pop_front()
                 .map(|user_info| user_info.user_id);
-
-            println!(
-                "debug | force_remove_primary_awaiter | success removed: {:?}",
-                front
-            );
             front
         } else {
             None
