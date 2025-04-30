@@ -1,5 +1,5 @@
 use crate::error::{ApRequestError, HpRequestError, RuRequestError};
-use basket_communication::basket_service::ru_request::QueueShift;
+use basket_communication::basket_service_requests::sq_request::QueueShift;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
 use std::collections::{HashMap, VecDeque};
 
@@ -18,25 +18,9 @@ struct ProductContext {
     product_stock: ProductStock,
 }
 
-struct FillAvailableHolderSlotResult {
-    new_holder_id: UserId,
-    its_old_queue_position: QueuePosition,
-}
-
-pub(crate) struct HaInfo {
-    pub(crate) free_holder_places: u32,
-    pub(crate) awaiters_count: u32,
-}
-
 pub(crate) struct HaRemovalResult {
     pub(crate) removed_user_id: UserId,
     pub(crate) removed_user_queue_position: Option<QueuePosition>,
-    pub(crate) queue_shifts: Vec<QueueShift>,
-}
-
-pub(crate) enum ShiftResult {
-    NothingToShift,
-    Shifted(Vec<QueueShift>),
 }
 
 pub(crate) struct Basket {
@@ -230,35 +214,6 @@ impl Basket {
             Err(RuRequestError::UserNotFound(product_id, user_id.clone()))
         }?;
 
-        let queue_shifts = if let Some(removed_awaiter_position) = removed_user_info.queue_position
-        {
-            // Awaiter removed
-            let queue_shifts =
-                Self::shift_queue_positions(product_context, removed_awaiter_position, 1);
-            queue_shifts
-        } else {
-            // Holder removed
-            let queue_shifts = if let Some(FillAvailableHolderSlotResult {
-                new_holder_id,
-                its_old_queue_position,
-            }) =
-                Self::fill_available_holder_slot(product_id, product_context)?
-            {
-                let mut queue_shifts =
-                    Self::shift_queue_positions(product_context, its_old_queue_position, 1);
-                queue_shifts.push(QueueShift {
-                    user_id: new_holder_id,
-                    new_queue_position: None,
-                });
-
-                queue_shifts
-            } else {
-                Vec::default()
-            };
-
-            queue_shifts
-        };
-
         println!(
             "debug | <RemovalEnding | holders = {:?}, awaiters = {:?}",
             product_context.product_holders, product_context.product_awaiters
@@ -267,99 +222,36 @@ impl Basket {
         Ok(HaRemovalResult {
             removed_user_id: removed_user_info.user_id,
             removed_user_queue_position: removed_user_info.queue_position,
-            queue_shifts,
         })
-    }
-
-    // TODO: we could optimize this by providing the function that returns a single element
-    // if we know that we have only one free slot (prevent vec allocation)
-    #[inline(always)]
-    fn fill_available_holder_slot(
-        product_id: ProductId,
-        product_context: &mut ProductContext,
-    ) -> Result<Option<FillAvailableHolderSlotResult>, RuRequestError> {
-        println!(
-            "debug | >FillingFreeSlotsBeginning | holders = {:?}, awaiters = {:?}",
-            product_context.product_holders, product_context.product_awaiters
-        );
-
-        #[cfg(feature = "extra_protection")]
-        if !Self::can_hold(product_context) {
-            println!("debug | FillingFreeSlots | cannot hold",);
-            return Err(RuRequestError::UnableToDequeueAwaiter(product_id));
-        }
-
-        let mut old_awaiter_info = product_context.product_awaiters.pop_front();
-        let old_queue_position = if let Some(old_awaiter_info) = old_awaiter_info.as_mut() {
-            old_awaiter_info.queue_position.take()
-        } else {
-            None
-        };
-        // old_awaiter_info.map(|info| UserInfo {
-        //     user_id: info.user_id,
-        //     queue_position: None,
-        // });
-
-        let old_awaiter_info = if let Some(mut old_awaiter_info) = old_awaiter_info {
-            let new_holder_info = old_awaiter_info.clone();
-            old_awaiter_info.queue_position = old_queue_position;
-            product_context.product_holders.push_back(new_holder_info);
-            Some(old_awaiter_info)
-        } else {
-            None
-        };
-
-        println!(
-            "debug | <FillingFreeSlotsEnding | holders = {:?}, awaiters = {:?}",
-            product_context.product_holders, product_context.product_awaiters
-        );
-
-        if let Some(old_awaiter_info) = old_awaiter_info {
-            println!("debug | FillingFreeSlotsRESULT | Some",);
-            Ok(Some(FillAvailableHolderSlotResult {
-                new_holder_id: old_awaiter_info.user_id,
-                its_old_queue_position: old_awaiter_info.queue_position.ok_or({
-                    println!("debug | Removal | debug error 3");
-                    RuRequestError::DebugError("The found awaiter should be present".to_owned())
-                })?,
-            }))
-        } else {
-            println!("debug | FillingFreeSlotsRESULT | None",);
-            Ok(None)
-        }
     }
 
     #[inline(always)]
     pub(crate) fn shift_queue_positions_of_product(
         &mut self,
         product_id: ProductId,
-        max_removed_queue_position: Option<QueuePosition>,
+        max_removed_queue_position: QueuePosition,
         shift: QueuePosition,
-    ) -> Option<ShiftResult> {
-        if let Some(max_removed_queue_position) = max_removed_queue_position {
-            let product_context = self.product_to_context.get_mut(&product_id)?;
-            Some(ShiftResult::Shifted(Self::shift_queue_positions(
-                product_context,
-                max_removed_queue_position,
-                shift,
-            )))
-        } else {
-            Some(ShiftResult::NothingToShift)
-        }
-    }
-
-    pub(crate) fn force_remove_awaiter(&mut self, product_id: ProductId) -> Option<UserId> {
+    ) -> Option<Vec<QueueShift>> {
         let product_context = self.product_to_context.get_mut(&product_id)?;
-        product_context
-            .product_awaiters
-            .pop_front()
-            .map(|awaiter| awaiter.user_id)
+        Some(Self::shift_queue_positions(
+            product_context,
+            max_removed_queue_position,
+            shift,
+        ))
     }
 
-    pub(crate) fn get_ha_info(&self, product_id: ProductId) -> Option<HaInfo> {
-        self.product_to_context
-            .get(&product_id)
-            .map(|context| Self::extract_ha_info(context))
+    pub(crate) fn force_remove_primary_awaiter(&mut self, product_id: ProductId) -> Option<UserId> {
+        let product_context = self.product_to_context.get_mut(&product_id)?;
+        let front = product_context.product_awaiters.front()?;
+
+        if front.queue_position == Some(0) {
+            product_context
+                .product_awaiters
+                .pop_front()
+                .map(|user_info| user_info.user_id)
+        } else {
+            None
+        }
     }
 
     #[inline(always)]
@@ -390,25 +282,6 @@ impl Basket {
         }
 
         queue_shifts
-    }
-
-    #[inline(always)]
-    fn extract_ha_info(product_context: &ProductContext) -> HaInfo {
-        let holders_count = product_context.product_holders.len() as u32;
-        let awaiters_count = product_context.product_awaiters.len() as u32;
-        let stock = product_context.product_stock;
-
-        if holders_count > stock {
-            println!(
-                "!<>! | very bad | holders_count > stock: {} > {}",
-                holders_count, stock
-            );
-        }
-
-        HaInfo {
-            free_holder_places: unsafe { stock.unchecked_sub(holders_count) },
-            awaiters_count,
-        }
     }
 
     #[inline(always)]

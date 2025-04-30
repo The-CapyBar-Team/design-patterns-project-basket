@@ -20,24 +20,11 @@ message Response {
   }
 }
 
-message HaInfo {
-  uint32 free_holder_places = 1;
-  uint32 awaiters_count = 2;
-}
-
-message QueueShift {
-  string user_id = 1;
-  optional uint32 new_queue_position = 2;
-}
-
 message Success {
   string removed_user_id = 1;
   optional uint32 removed_user_queue_position = 2;
-  repeated QueueShift queue_shifts = 3;
-  optional HaInfo ha_info = 4;
 }
 
 message Failure {
-  optional HaInfo ha_info = 1; // None when product does not exist
   FailureStatus status = 2;
 }

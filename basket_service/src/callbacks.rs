@@ -156,31 +156,21 @@ impl basket_service_server::BasketService for BasketContext {
 
         let mut basket = self.basket.lock().await;
         let removal_result = basket.remove_holder_or_awaiter_of_product(product_id, user_id);
-        let ha_info = basket
-            .get_ha_info(product_id)
-            .map(|ha_info| ru_request::HaInfo {
-                free_holder_places: ha_info.free_holder_places,
-                awaiters_count: ha_info.awaiters_count,
-            });
         drop(basket);
 
         let response = match removal_result.map_err(ru_request_error_to_status) {
             Ok(HaRemovalResult {
                 removed_user_id,
                 removed_user_queue_position,
-                queue_shifts,
             }) => ru_request::Response {
                 response: Some(Success(ru_request::Success {
                     removed_user_id,
                     removed_user_queue_position,
-                    queue_shifts,
-                    ha_info,
                 })),
             },
 
             Err(Ok(status)) => ru_request::Response {
                 response: Some(Failure(ru_request::Failure {
-                    ha_info,
                     status: status.into(),
                 })),
             },
@@ -193,7 +183,6 @@ impl basket_service_server::BasketService for BasketContext {
 
                 ru_request::Response {
                     response: Some(Failure(ru_request::Failure {
-                        ha_info,
                         status: ru_request::FailureStatus::LoggedInternallyError.into(),
                     })),
                 }
@@ -213,53 +202,36 @@ impl basket_service_server::BasketService for BasketContext {
 
         let sq_request::Request {
             product_id,
-            max_removed_queue_position,
-            shift,
-            force_removed_awaiters_count,
+            removed_user_queue_position,
         } = request.into_inner();
 
         let mut basket = self.basket.lock().await;
+        let shift = 1;
 
-        let shift_result =
-            basket.shift_queue_positions_of_product(product_id, max_removed_queue_position, shift);
-        let force_removed_awaiter = if force_removed_awaiters_count == 1 {
+        let shift_result = basket.shift_queue_positions_of_product(
+            product_id,
+            removed_user_queue_position.unwrap_or(0),
+            shift,
+        );
+
+        let force_removed_primary_awaiter = if removed_user_queue_position.is_none() {
             basket
-                .force_remove_awaiter(product_id)
-                .map(|force_removed_awaiter_id| sq_request::ForceRemovedAwaiter {
-                    user_id: force_removed_awaiter_id,
+                .force_remove_primary_awaiter(product_id)
+                .map(|primary_id| sq_request::ForceRemovedAwaiter {
+                    user_id: primary_id,
                     product_id,
                 })
         } else {
             None
         };
+
         drop(basket);
 
         let response = match shift_result {
-            Some(ShiftResult::Shifted(queue_shifts)) => {
-                let queue_shifts = queue_shifts
-                    .into_iter()
-                    .map(
-                        |ru_request::QueueShift {
-                             user_id,
-                             new_queue_position,
-                         }| sq_request::QueueShift {
-                            user_id,
-                            new_queue_position,
-                        },
-                    )
-                    .collect();
-
-                sq_request::Response {
-                    response: Some(Success(sq_request::Success {
-                        force_removed_awaiter,
-                        queue_shifts,
-                    })),
-                }
-            }
-            Some(ShiftResult::NothingToShift) => sq_request::Response {
+            Some(queue_shifts) => sq_request::Response {
                 response: Some(Success(sq_request::Success {
-                    force_removed_awaiter,
-                    queue_shifts: Vec::default(),
+                    force_removed_awaiter: force_removed_primary_awaiter,
+                    queue_shifts,
                 })),
             },
             None => sq_request::Response {
