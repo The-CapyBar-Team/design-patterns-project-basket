@@ -23,6 +23,11 @@ struct FillAvailableHolderSlotResult {
     its_old_queue_position: QueuePosition,
 }
 
+pub(crate) struct HaInfo {
+    pub(crate) free_holder_places: u32,
+    pub(crate) awaiters_count: u32,
+}
+
 pub(crate) struct HaRemovalResult {
     pub(crate) removed_user_id: UserId,
     pub(crate) removed_user_queue_position: Option<QueuePosition>,
@@ -300,6 +305,20 @@ impl Basket {
         ))
     }
 
+    pub(crate) fn force_remove_awaiter(&mut self, product_id: ProductId) -> Option<UserId> {
+        let product_context = self.product_to_context.get_mut(&product_id)?;
+        product_context
+            .product_awaiters
+            .pop_front()
+            .map(|awaiter| awaiter.user_id)
+    }
+
+    pub(crate) fn get_ha_info(&self, product_id: ProductId) -> Option<HaInfo> {
+        self.product_to_context
+            .get(&product_id)
+            .map(|context| Self::extract_ha_info(context))
+    }
+
     #[inline(always)]
     fn shift_queue_positions(
         product_context: &mut ProductContext,
@@ -330,6 +349,30 @@ impl Basket {
         queue_shifts
     }
 
+    #[inline(always)]
+    fn extract_ha_info(product_context: &ProductContext) -> HaInfo {
+        let holders_count = product_context.product_holders.len() as u32;
+        let awaiters_count = product_context.product_awaiters.len() as u32;
+        let stock = product_context.product_stock;
+
+        if holders_count > stock {
+            println!(
+                "!<>! | very bad | holders_count > stock: {} > {}",
+                holders_count, stock
+            );
+        }
+
+        HaInfo {
+            free_holder_places: unsafe { stock.unchecked_sub(holders_count) },
+            awaiters_count,
+        }
+    }
+
+    #[inline(always)]
+    fn can_hold(product_context: &ProductContext) -> bool {
+        product_context.product_holders.len() < product_context.product_stock as usize
+    }
+
     #[cfg(test)]
     pub(crate) fn product_context(
         &self,
@@ -345,11 +388,6 @@ impl Basket {
                 )
             })
             .map(|((holders, _), (awaiters, _), stock)| (holders, awaiters, stock))
-    }
-
-    #[inline(always)]
-    fn can_hold(product_context: &ProductContext) -> bool {
-        product_context.product_holders.len() < product_context.product_stock as usize
     }
 
     #[inline(always)]

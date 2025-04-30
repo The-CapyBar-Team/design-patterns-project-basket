@@ -280,6 +280,7 @@ where
             .present_basket_ids();
 
         let mut ru_success: Option<(BasketId, ru_request::Success)> = None;
+        let mut ha_infos = Vec::new();
 
         let mut request_sender = self.request_sender.lock().await;
 
@@ -304,7 +305,8 @@ where
                     ru_success = Some((basket_id, received_ru_success));
                 }
 
-                Err(GrpcFailure::Custom(ru_request::Failure { status })) => {
+                Err(GrpcFailure::Custom(ru_request::Failure { ha_info, status })) => {
+                    ha_infos.push((basket_id, ha_info));
                     match ru_request::FailureStatus::from_i32(status) {
                         Some(ru_request::FailureStatus::UserNotFound) => {
                             println!(
@@ -340,14 +342,41 @@ where
                 removed_user_id,
                 removed_user_queue_position,
                 queue_shifts,
+                ha_info,
             },
         )) = ru_success
         {
+            let donor_basket = if let Some(ha_info) = ha_info {
+                if ha_info.free_holder_places > 0 {
+                    ha_infos
+                        .into_iter()
+                        .find(|&(_, info)| {
+                            info.map(|info| info.awaiters_count > 0).unwrap_or(false)
+                        })
+                        .map(|(donor_basket_id, _)| donor_basket_id)
+                } else {
+                    None
+                }
+            } else {
+                eprintln!(
+                    "!<>! HaInfo Error | ha_info must not be None for successful response from basket #{}",
+                    basket_remover_id
+                );
+                None
+            };
+
             let mut collected_queue_shifts = Vec::new();
 
             if let Some(removed_user_queue_position) = removed_user_queue_position {
                 for basket_id in present_basket_ids {
                     if basket_id != basket_remover_id {
+                        let force_removed_awaiters_count =
+                            if let Some(donor_basket_id) = donor_basket {
+                                if donor_basket_id == basket_id { 1 } else { 0 }
+                            } else {
+                                0
+                            };
+
                         let sq_response = request_sender
                             .perform_sq_request(
                                 basket_id,
@@ -355,17 +384,22 @@ where
                                     product_id,
                                     max_removed_queue_position: removed_user_queue_position,
                                     shift: 1,
+                                    force_removed_awaiters_count,
                                 },
                             )
                             .await;
 
-                        match sq_response {
-                            Ok(sq_request::Success { queue_shifts }) => {
+                        let force_removed_awaiter = match sq_response {
+                            Ok(sq_request::Success {
+                                force_removed_awaiter,
+                                queue_shifts,
+                            }) => {
                                 println!(
                                     "debug | balancer | sq_request | queue shifts fro basket (id = {}): {:?}",
                                     basket_id, queue_shifts
                                 );
                                 collected_queue_shifts.push(queue_shifts);
+                                force_removed_awaiter
                             }
 
                             Err(GrpcFailure::Custom(sq_request::Failure { status })) => {
@@ -380,6 +414,7 @@ where
                                         );
                                     }
                                 }
+                                None
                             }
 
                             Err(GrpcFailure::Internal) => {
@@ -387,6 +422,58 @@ where
                                     "!<>! Internal RU Error | basket with id = {} did not respond to ru_request",
                                     basket_id
                                 );
+                                None
+                            }
+                        };
+
+                        if let Some(sq_request::ForceRemovedAwaiter {
+                            user_id,
+                            product_id,
+                        }) = force_removed_awaiter
+                        {
+                            let hp_response = request_sender
+                                .perform_hp_request(
+                                    basket_remover_id,
+                                    hp_request::Request {
+                                        user_id,
+                                        product_id,
+                                    },
+                                )
+                                .await;
+
+                            match hp_response {
+                                Ok(hp_request::Success {
+                                    user_id,
+                                    product_id,
+                                }) => {
+                                    self.response_sender
+                                        .lock()
+                                        .await
+                                        .send_queue_position_update(
+                                            external::QueuePositionUpdateMessage {
+                                                user_id,
+                                                update_message: Some(
+                                                    external::QueuePositionUpdate {
+                                                        product_id,
+                                                        queue_position: None,
+                                                        acquisition_time: None,
+                                                    },
+                                                ),
+                                            },
+                                        )
+                                        .await;
+                                }
+                                Err(GrpcFailure::Custom(err)) => {
+                                    eprintln!(
+                                        "!<>! Removal | Critical | hp request after removing one awaiter was unsuccessful | {:?}",
+                                        err
+                                    );
+                                }
+                                Err(GrpcFailure::Internal) => {
+                                    eprintln!(
+                                        "!<>! Removal | Critical | hp request after removing one awaiter was unsuccessful | Internal Error",
+                                    );
+                                }
                             }
                         }
                     }

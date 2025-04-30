@@ -156,6 +156,12 @@ impl basket_service_server::BasketService for BasketContext {
 
         let mut basket = self.basket.lock().await;
         let removal_result = basket.remove_holder_or_awaiter_of_product(product_id, user_id);
+        let ha_info = basket
+            .get_ha_info(product_id)
+            .map(|ha_info| ru_request::HaInfo {
+                free_holder_places: ha_info.free_holder_places,
+                awaiters_count: ha_info.awaiters_count,
+            });
         drop(basket);
 
         let response = match removal_result.map_err(ru_request_error_to_status) {
@@ -168,11 +174,13 @@ impl basket_service_server::BasketService for BasketContext {
                     removed_user_id,
                     removed_user_queue_position,
                     queue_shifts,
+                    ha_info,
                 })),
             },
 
             Err(Ok(status)) => ru_request::Response {
                 response: Some(Failure(ru_request::Failure {
+                    ha_info,
                     status: status.into(),
                 })),
             },
@@ -185,6 +193,7 @@ impl basket_service_server::BasketService for BasketContext {
 
                 ru_request::Response {
                     response: Some(Failure(ru_request::Failure {
+                        ha_info,
                         status: ru_request::FailureStatus::LoggedInternallyError.into(),
                     })),
                 }
@@ -206,11 +215,22 @@ impl basket_service_server::BasketService for BasketContext {
             product_id,
             max_removed_queue_position,
             shift,
+            force_removed_awaiters_count,
         } = request.into_inner();
 
         let mut basket = self.basket.lock().await;
         let shift_result =
             basket.shift_queue_positions_of_product(product_id, max_removed_queue_position, shift);
+        let force_removed_awaiter = if force_removed_awaiters_count == 1 {
+            basket
+                .force_remove_awaiter(product_id)
+                .map(|force_removed_awaiter_id| sq_request::ForceRemovedAwaiter {
+                    user_id: force_removed_awaiter_id,
+                    product_id,
+                })
+        } else {
+            None
+        };
         drop(basket);
 
         let response = if let Some(queue_shifts) = shift_result {
@@ -228,7 +248,10 @@ impl basket_service_server::BasketService for BasketContext {
                 .collect();
 
             sq_request::Response {
-                response: Some(Success(sq_request::Success { queue_shifts })),
+                response: Some(Success(sq_request::Success {
+                    force_removed_awaiter,
+                    queue_shifts,
+                })),
             }
         } else {
             sq_request::Response {
