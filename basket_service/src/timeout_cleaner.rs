@@ -9,7 +9,7 @@ use tokio::time::{interval, Duration};
 pub(crate) async fn timeout_cleaner(basket: Arc<Mutex<Basket>>) {
     let mut ticker = interval(Duration::from_secs(1));
     let mut eh_sender = retry_and_report_error(async move || {
-        RabbitSender::<eh_request::Request>::new("amqp://guest:guest@rabbitmq:5672", "ExpiredUsers")
+        RabbitSender::<eh_request::Request>::new("amqp://guest:guest@rabbitmq:5672", "ExpiredHolders")
             .await
     })
     .await;
@@ -21,6 +21,8 @@ pub(crate) async fn timeout_cleaner(basket: Arc<Mutex<Basket>>) {
         let expired_holders = basket.get_expired_holders(current_timestamp);
         drop(basket);
 
-        let _ = eh_sender.send_message(expired_holders);
+        if Err(err) = eh_sender.send_message(expired_holders) {
+            println!("ERROR SENDING: {}", err);
+        }
     }
 }
