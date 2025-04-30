@@ -219,6 +219,7 @@ impl basket_service_server::BasketService for BasketContext {
         } = request.into_inner();
 
         let mut basket = self.basket.lock().await;
+
         let shift_result =
             basket.shift_queue_positions_of_product(product_id, max_removed_queue_position, shift);
         let force_removed_awaiter = if force_removed_awaiters_count == 1 {
@@ -233,32 +234,39 @@ impl basket_service_server::BasketService for BasketContext {
         };
         drop(basket);
 
-        let response = if let Some(queue_shifts) = shift_result {
-            let queue_shifts = queue_shifts
-                .into_iter()
-                .map(
-                    |ru_request::QueueShift {
-                         user_id,
-                         new_queue_position,
-                     }| sq_request::QueueShift {
-                        user_id,
-                        new_queue_position,
-                    },
-                )
-                .collect();
+        let response = match shift_result {
+            Some(ShiftResult::Shifted(queue_shifts)) => {
+                let queue_shifts = queue_shifts
+                    .into_iter()
+                    .map(
+                        |ru_request::QueueShift {
+                             user_id,
+                             new_queue_position,
+                         }| sq_request::QueueShift {
+                            user_id,
+                            new_queue_position,
+                        },
+                    )
+                    .collect();
 
-            sq_request::Response {
+                sq_request::Response {
+                    response: Some(Success(sq_request::Success {
+                        force_removed_awaiter,
+                        queue_shifts,
+                    })),
+                }
+            }
+            Some(ShiftResult::NothingToShift) => sq_request::Response {
                 response: Some(Success(sq_request::Success {
                     force_removed_awaiter,
-                    queue_shifts,
+                    queue_shifts: Vec::default(),
                 })),
-            }
-        } else {
-            sq_request::Response {
+            },
+            None => sq_request::Response {
                 response: Some(Failure(sq_request::Failure {
                     status: sq_request::FailureStatus::ProductNotFound.into(),
                 })),
-            }
+            },
         };
 
         Ok(Response::new(response))

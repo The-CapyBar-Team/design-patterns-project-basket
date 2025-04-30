@@ -34,6 +34,11 @@ pub(crate) struct HaRemovalResult {
     pub(crate) queue_shifts: Vec<QueueShift>,
 }
 
+pub(crate) enum ShiftResult {
+    NothingToShift,
+    Shifted(Vec<QueueShift>),
+}
+
 pub(crate) struct Basket {
     product_to_context: HashMap<ProductId, ProductContext>,
     on_product_stock_changed:
@@ -197,10 +202,13 @@ impl Basket {
                 "debug | Removal | user with id '{}' found in holders at position {}. About to be removed",
                 user_id, found_index
             );
-            product_context.product_holders.remove(found_index).ok_or({
-                println!("debug | Removal | debug error 1");
-                RuRequestError::DebugError("The found holder should be present".to_owned())
-            })
+            product_context
+                .product_holders
+                .remove(found_index)
+                .ok_or_else(|| {
+                    println!("debug | Removal | debug error 1");
+                    RuRequestError::DebugError("The found holder should be present".to_owned())
+                })
         } else if let Some(found_index) = product_context
             .product_awaiters
             .iter()
@@ -210,10 +218,13 @@ impl Basket {
                 "debug | Removal | user with id '{}' found in awaiters at position {}. About to be removed",
                 user_id, found_index
             );
-            product_context.product_awaiters.remove(found_index).ok_or({
-                println!("debug | Removal | debug error 2");
-                RuRequestError::DebugError("The found awaiter should be present".to_owned())
-            })
+            product_context
+                .product_awaiters
+                .remove(found_index)
+                .ok_or_else(|| {
+                    println!("debug | Removal | debug error 2");
+                    RuRequestError::DebugError("The found awaiter should be present".to_owned())
+                })
         } else {
             println!("debug | Removal | user with id '{}' not found", user_id);
             Err(RuRequestError::UserNotFound(product_id, user_id.clone()))
@@ -322,15 +333,19 @@ impl Basket {
     pub(crate) fn shift_queue_positions_of_product(
         &mut self,
         product_id: ProductId,
-        max_removed_queue_position: QueuePosition,
+        max_removed_queue_position: Option<QueuePosition>,
         shift: QueuePosition,
-    ) -> Option<Vec<QueueShift>> {
-        let product_context = self.product_to_context.get_mut(&product_id)?;
-        Some(Self::shift_queue_positions(
-            product_context,
-            max_removed_queue_position,
-            shift,
-        ))
+    ) -> Option<ShiftResult> {
+        if let Some(max_removed_queue_position) = max_removed_queue_position {
+            let product_context = self.product_to_context.get_mut(&product_id)?;
+            Some(ShiftResult::Shifted(Self::shift_queue_positions(
+                product_context,
+                max_removed_queue_position,
+                shift,
+            )))
+        } else {
+            Some(ShiftResult::NothingToShift)
+        }
     }
 
     pub(crate) fn force_remove_awaiter(&mut self, product_id: ProductId) -> Option<UserId> {

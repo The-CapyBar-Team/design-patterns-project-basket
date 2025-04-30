@@ -8,7 +8,7 @@ enum FailureStatus {
 
 message Request {
   int32 product_id = 1;
-  uint32 max_removed_queue_position = 2;
+  optional uint32 max_removed_queue_position = 2; // None if holder was removed but we still need to call the request to rearrange awaiters from other baskets
   uint32 shift = 3;
   uint32 force_removed_awaiters_count = 4;
 }
