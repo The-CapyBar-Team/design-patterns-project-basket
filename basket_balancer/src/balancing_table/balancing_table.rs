@@ -359,6 +359,10 @@ where
             removed_user_queue_position,
         };
 
+        balancing_info
+            .basket_balancer
+            .add_basket_id(remover_basket_id);
+
         let mut queue_shift_list = Vec::new();
 
         for &basket_id in present_basket_ids.iter() {
@@ -416,7 +420,9 @@ where
                             "debug | sq_request | hp_request successful | {:?}",
                             hp_response
                         );
-                        // success, do nothing
+                        balancing_info
+                            .basket_balancer
+                            .remove_basket_id(remover_basket_id);
                     }
 
                     Err(GrpcFailure::Custom(hp_request::Failure {
