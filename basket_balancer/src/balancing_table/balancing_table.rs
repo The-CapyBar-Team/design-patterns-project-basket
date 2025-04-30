@@ -386,11 +386,18 @@ where
                 }
             };
 
+            println!("GOING FORWARD BASKET #{}", basket_id);
+
             if let Some(sq_request::ForceRemovedAwaiter {
                 user_id,
                 product_id,
             }) = force_removed_awaiter
             {
+                println!(
+                    "debug | sq_request | ForceRemovedAwaiter received | {:?}",
+                    hp_response
+                );
+
                 queue_shifts.push(sq_request::QueueShift {
                     user_id: user_id.clone(),
                     new_queue_position: None,
