@@ -370,7 +370,13 @@ where
                 force_removed_awaiter,
                 mut queue_shifts,
             } = match sq_response {
-                Ok(sq_success) => sq_success,
+                Ok(sq_success) => {
+                    println!(
+                        "debug | sq_request | received success from basket #{} | {:?}",
+                        basket_id, sq_success
+                    );
+                    sq_success
+                }
                 Err(sq_error) => {
                     println!(
                         "debug | sq_request | basket_id = {} | {:?}",
@@ -405,6 +411,10 @@ where
 
                 match hp_response {
                     Ok(_) => {
+                        println!(
+                            "debug | sq_request | hp_request successful | {:?}",
+                            hp_response
+                        );
                         // success, do nothing
                     }
 
@@ -422,6 +432,11 @@ where
                         println!("!<>! Removal | hp_request | internal grpc error");
                     }
                 }
+            } else {
+                println!(
+                    "debug | sq_request | no force-removed user found for basket #{}",
+                    basket_id
+                );
             }
 
             queue_shift_list.push(queue_shifts);
@@ -436,6 +451,10 @@ where
                 new_queue_position,
             } in queue_shifts
             {
+                println!(
+                    "debug | sending queue shift | user_id = '{}', new_queue_position = {:?}",
+                    user_id, new_queue_position
+                );
                 self.response_sender
                     .lock()
                     .await
