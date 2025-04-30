@@ -13,6 +13,7 @@ use tonic::Request;
 mod basket;
 mod callbacks;
 mod error;
+mod product_status_request_handler;
 mod timeout_cleaner;
 
 #[tokio::main]
@@ -29,6 +30,7 @@ async fn main() -> anyhow::Result<()> {
     let basket = Arc::new(Mutex::new(Basket::new()));
     let server_basket_handle = basket.clone();
     let timeout_cleaner_basket_handle = basket.clone();
+    let third_handle = basket.clone();
 
     let server_handle = tokio::spawn(async move {
         let basket_context = BasketContext::new(server_basket_handle);
@@ -90,6 +92,11 @@ async fn main() -> anyhow::Result<()> {
 
     let timeout_cleaner = tokio::spawn(async move {
         timeout_cleaner::timeout_cleaner(timeout_cleaner_basket_handle).await;
+    });
+
+    let product_status_request_handler = tokio::spawn(async move {
+        product_status_request_handler::product_status_request_handler(basket_id, third_handle)
+            .await;
     });
 
     server_handle.await?;

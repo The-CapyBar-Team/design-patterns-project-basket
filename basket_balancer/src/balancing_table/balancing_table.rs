@@ -377,7 +377,7 @@ where
 
             let sq_request::Success {
                 force_removed_awaiter,
-                mut queue_shifts,
+                queue_shifts,
             } = match sq_response {
                 Ok(sq_success) => sq_success,
                 Err(sq_error) => {

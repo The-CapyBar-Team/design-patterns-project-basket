@@ -1,6 +1,7 @@
 use crate::error::{ApRequestError, HpRequestError, RuRequestError};
 use basket_communication::basket_balancer::eh_request;
 use basket_communication::basket_service_requests::sq_request::QueueShift;
+use basket_communication::external;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
 use std::collections::{HashMap, VecDeque};
 
@@ -274,7 +275,7 @@ impl Basket {
 
     #[inline(always)]
     pub(crate) fn get_expired_holders(&self, current_ts: Timestamp) -> eh_request::Request {
-        const EXPIRATION_TIME_SECONDS: Timestamp = 30;
+        const EXPIRATION_TIME_SECONDS: Timestamp = 600;
         let mut expired_holders = Vec::new();
         for (&product_id, product_context) in self.product_to_context.iter() {
             let (product_holders, _) = product_context.product_holders.as_slices();
@@ -295,6 +296,34 @@ impl Basket {
         }
 
         eh_request::Request { expired_holders }
+    }
+
+    #[inline(always)]
+    pub(crate) fn restore_basket_for_user(
+        &self,
+        user_id: UserId,
+    ) -> Vec<external::QueuePositionUpdate> {
+        let mut result = Vec::new();
+        for (&product_id, product_context) in self.product_to_context.iter() {
+            if let Some(UserInfo {
+                user_id,
+                queue_position,
+                created_at_ts,
+            }) = product_context
+                .product_holders
+                .iter()
+                .chain(product_context.product_awaiters.iter())
+                .find(|&info| info.user_id == user_id)
+            {
+                result.push(external::QueuePositionUpdate {
+                    product_id,
+                    queue_position: *queue_position,
+                    acquisition_time: *created_at_ts,
+                });
+            }
+        }
+
+        result
     }
 
     #[cfg(test)]
