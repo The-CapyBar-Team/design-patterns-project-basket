@@ -184,30 +184,40 @@ impl Basket {
             .ok_or(RuRequestError::ProductNotFound(product_id, user_id.clone()))?;
 
         println!(
-            "debug | RemovalBeginning | holders = {:?}, awaiters = {:?}",
+            "debug | >RemovalBeginning | holders = {:?}, awaiters = {:?}",
             product_context.product_holders, product_context.product_awaiters
         );
 
-        let removed_user_info =
-            if let Some(found_index) = product_context
-                .product_holders
-                .iter()
-                .position(|info| info.user_id == user_id)
-            {
-                product_context.product_holders.remove(found_index).ok_or(
-                    RuRequestError::DebugError("The found holder should be present".to_owned()),
-                )
-            } else if let Some(found_index) = product_context
-                .product_awaiters
-                .iter()
-                .position(|info| info.user_id == user_id)
-            {
-                product_context.product_awaiters.remove(found_index).ok_or(
-                    RuRequestError::DebugError("The found awaiter should be present".to_owned()),
-                )
-            } else {
-                Err(RuRequestError::UserNotFound(product_id, user_id.clone()))
-            }?;
+        let removed_user_info = if let Some(found_index) = product_context
+            .product_holders
+            .iter()
+            .position(|info| info.user_id == user_id)
+        {
+            println!(
+                "debug | Removal | user with id '{}' found in holders at position {}. About to be removed",
+                user_id, found_index
+            );
+            product_context.product_holders.remove(found_index).ok_or({
+                println!("debug | Removal | debug error 1");
+                RuRequestError::DebugError("The found holder should be present".to_owned())
+            })
+        } else if let Some(found_index) = product_context
+            .product_awaiters
+            .iter()
+            .position(|info| info.user_id == user_id)
+        {
+            println!(
+                "debug | Removal | user with id '{}' found in awaiters at position {}. About to be removed",
+                user_id, found_index
+            );
+            product_context.product_awaiters.remove(found_index).ok_or({
+                println!("debug | Removal | debug error 2");
+                RuRequestError::DebugError("The found awaiter should be present".to_owned())
+            })
+        } else {
+            println!("debug | Removal | user with id '{}' not found", user_id);
+            Err(RuRequestError::UserNotFound(product_id, user_id.clone()))
+        }?;
 
         let queue_shifts = if let Some(removed_awaiter_position) = removed_user_info.queue_position
         {
@@ -239,7 +249,7 @@ impl Basket {
         };
 
         println!(
-            "debug | RemovalEnding | holders = {:?}, awaiters = {:?}",
+            "debug | <RemovalEnding | holders = {:?}, awaiters = {:?}",
             product_context.product_holders, product_context.product_awaiters
         );
 
@@ -257,8 +267,14 @@ impl Basket {
         product_id: ProductId,
         product_context: &mut ProductContext,
     ) -> Result<Option<FillAvailableHolderSlotResult>, RuRequestError> {
+        println!(
+            "debug | >FillingFreeSlotsBeginning | holders = {:?}, awaiters = {:?}",
+            product_context.product_holders, product_context.product_awaiters
+        );
+
         #[cfg(feature = "extra_protection")]
         if !Self::can_hold(product_context) {
+            println!("debug | FillingFreeSlots | cannot hold",);
             return Err(RuRequestError::UnableToDequeueAwaiter(product_id));
         }
 
@@ -278,14 +294,22 @@ impl Basket {
             None
         };
 
+        println!(
+            "debug | <FillingFreeSlotsEnding | holders = {:?}, awaiters = {:?}",
+            product_context.product_holders, product_context.product_awaiters
+        );
+
         if let Some(old_awaiter_info) = old_awaiter_info {
+            println!("debug | FillingFreeSlotsRESULT | Some",);
             Ok(Some(FillAvailableHolderSlotResult {
                 new_holder_id: old_awaiter_info.user_id,
-                its_old_queue_position: old_awaiter_info.queue_position.ok_or(
-                    RuRequestError::DebugError("The found awaiter should be present".to_owned()),
-                )?,
+                its_old_queue_position: old_awaiter_info.queue_position.ok_or({
+                    println!("debug | Removal | debug error 3");
+                    RuRequestError::DebugError("The found awaiter should be present".to_owned())
+                })?,
             }))
         } else {
+            println!("debug | FillingFreeSlotsRESULT | None",);
             Ok(None)
         }
     }
