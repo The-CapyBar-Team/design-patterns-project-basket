@@ -72,5 +72,5 @@ impl ResponseSender {
 
 #[inline(always)]
 fn log_error(sender_name: &str, error: impl std::error::Error) -> () {
-    eprintln!("!<>! Sender Error | {} | {}", sender_name, error,);
+    println!("!<>! Sender Error | {} | {}", sender_name, error,);
 }

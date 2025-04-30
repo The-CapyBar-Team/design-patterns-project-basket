@@ -70,7 +70,7 @@ where
     pub async fn listen_to_messages(&mut self, listener: impl AsyncFn(MessageType)) {
         while let Some(delivery) = self.consumer.next().await {
             if let Err(error) = self.process_delivery(delivery, &listener).await {
-                eprintln!("!<>! Error while listening to rabbit: {:?}", error);
+                println!("!<>! Error while listening to rabbit: {:?}", error);
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
         }

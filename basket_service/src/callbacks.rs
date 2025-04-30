@@ -125,7 +125,7 @@ impl basket_service_server::BasketService for BasketContext {
                 })),
             },
             Err(Err(LocallyLoggedError { error })) => {
-                eprintln!(
+                println!(
                     "!<>! | basket_service | AP | locally logged error | {}",
                     error
                 );
@@ -186,7 +186,7 @@ impl basket_service_server::BasketService for BasketContext {
             },
 
             Err(Err(LocallyLoggedError { error })) => {
-                eprintln!(
+                println!(
                     "!<>! | basket_service | RU | locally logged error | {}",
                     error
                 );

@@ -42,7 +42,7 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
                     .add_product_to_basket(product_id, user_id)
                     .await
                 {
-                    eprintln!("!<>! Adding to cart error: {}", hap_error);
+                    println!("!<>! Adding to cart error: {}", hap_error);
                 }
             },
         )

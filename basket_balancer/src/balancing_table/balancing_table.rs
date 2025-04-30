@@ -174,7 +174,7 @@ where
                             .remove_basket_id(next_basket_id);
                     }
                     Some(hp_request::FailureStatus::ProductNotFound) => {
-                        eprintln!(
+                        println!(
                             "!<>! AddToCartRequest | ProductNotFound | {}",
                             error_message
                         );
@@ -182,7 +182,7 @@ where
                         return Ok(());
                     } // TODO: add handling of ProductNotFound
                     Some(hp_request::FailureStatus::UserAlreadyAdded) => {
-                        eprintln!(
+                        println!(
                             "!<>! AddToCartRequest | UserAlreadyAdded | {}",
                             error_message
                         );
@@ -190,7 +190,7 @@ where
                         return Ok(());
                     } // TODO: add handling of UserAlreadyAdded
                     None => {
-                        eprintln!(
+                        println!(
                             "!<>! AddToCartRequest | unknown status code of hp_request::FailureStatus: {}",
                             status
                         );
@@ -200,7 +200,7 @@ where
                 },
 
                 Err(GrpcFailure::Internal) => {
-                    eprintln!("!<>! AddToCartRequest | internal grpc error");
+                    println!("!<>! AddToCartRequest | internal grpc error");
                 } // TODO: add protection agains internal errors
             }
         }
@@ -315,11 +315,11 @@ where
                             );
                         }
                         Some(ru_request::FailureStatus::ProductNotFound) => {
-                            eprintln!("!<>! RemoveFromCartRequest | ProductNotFound");
+                            println!("!<>! RemoveFromCartRequest | ProductNotFound");
                         }
                         Some(ru_request::FailureStatus::LoggedInternallyError) => {}
                         None => {
-                            eprintln!(
+                            println!(
                                 "!<>! RemoveFromCartRequest | unknown status code of ru_request::FailureStatus: {}",
                                 status
                             );
@@ -328,7 +328,7 @@ where
                 }
 
                 Err(GrpcFailure::Internal) => {
-                    eprintln!(
+                    println!(
                         "!<>! Internal RU Error | basket with id = {} did not respond to ru_request",
                         basket_id
                     );
@@ -358,7 +358,7 @@ where
                     None
                 }
             } else {
-                eprintln!(
+                println!(
                     "!<>! HaInfo Error | ha_info must not be None for successful response from basket #{}",
                     basket_remover_id
                 );
@@ -405,10 +405,10 @@ where
                             Err(GrpcFailure::Custom(sq_request::Failure { status })) => {
                                 match sq_request::FailureStatus::from_i32(status) {
                                     Some(sq_request::FailureStatus::ProductNotFound) => {
-                                        eprintln!("!<>! RemoveFromCartRequest | ProductNotFound");
+                                        println!("!<>! RemoveFromCartRequest | ProductNotFound");
                                     }
                                     None => {
-                                        eprintln!(
+                                        println!(
                                             "!<>! RemoveFromCartRequest | unknown status code of sq_request::FailureStatus: {}",
                                             status
                                         );
@@ -418,7 +418,7 @@ where
                             }
 
                             Err(GrpcFailure::Internal) => {
-                                eprintln!(
+                                println!(
                                     "!<>! Internal RU Error | basket with id = {} did not respond to ru_request",
                                     basket_id
                                 );
@@ -464,13 +464,13 @@ where
                                         .await;
                                 }
                                 Err(GrpcFailure::Custom(err)) => {
-                                    eprintln!(
+                                    println!(
                                         "!<>! Removal | Critical | hp request after removing one awaiter was unsuccessful | {:?}",
                                         err
                                     );
                                 }
                                 Err(GrpcFailure::Internal) => {
-                                    eprintln!(
+                                    println!(
                                         "!<>! Removal | Critical | hp request after removing one awaiter was unsuccessful | Internal Error",
                                     );
                                 }
@@ -513,7 +513,7 @@ where
             }
         } else {
             // User does not exist!
-            eprintln!(
+            println!(
                 "!<>! RemoveFromCartRequest | user has been found in no baskets: {}",
                 user_id
             );
