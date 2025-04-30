@@ -36,7 +36,7 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
                         }| {
                 let mut balancing_table = balancing_table.lock().await;
                 if let Err(err) = balancing_table
-                    .remove_product_from_basket(product_id, user_id.clone())
+                    .remove_product_from_basket(product_id, user_id.clone(), true)
                     .await
                 {
                     println!("!<>! | BuyProductRequest | {}", err);

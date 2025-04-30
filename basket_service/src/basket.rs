@@ -166,6 +166,7 @@ impl Basket {
         &mut self,
         product_id: ProductId,
         user_id: UserId,
+        decrement_stock: bool,
     ) -> Result<HaRemovalResult, RuRequestError> {
         let product_context = self
             .product_to_context
@@ -192,6 +193,12 @@ impl Basket {
             } else {
                 Err(RuRequestError::UserNotFound(product_id, user_id.clone()))
             }?;
+
+        if decrement_stock {
+            if let Some(new_stock) = product_context.product_stock.checked_sub(1) {
+                product_context.product_stock = new_stock;
+            }
+        }
 
         Ok(HaRemovalResult {
             removed_user_id: removed_user_info.user_id,

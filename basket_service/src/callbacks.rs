@@ -152,10 +152,12 @@ impl basket_service_server::BasketService for BasketContext {
         let ru_request::Request {
             user_id,
             product_id,
+            decrement_stock,
         } = request.into_inner();
 
         let mut basket = self.basket.lock().await;
-        let removal_result = basket.remove_holder_or_awaiter_of_product(product_id, user_id);
+        let removal_result =
+            basket.remove_holder_or_awaiter_of_product(product_id, user_id, decrement_stock);
         drop(basket);
 
         let response = match removal_result.map_err(ru_request_error_to_status) {

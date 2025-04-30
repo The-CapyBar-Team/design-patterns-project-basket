@@ -268,6 +268,7 @@ where
         &mut self,
         product_id: ProductId,
         user_id: UserId,
+        decrement_stock: bool,
     ) -> Result<(), BalancerError> {
         let mut binding = self.products_to_balancing_info.lock().await;
         let balancing_info = binding
@@ -293,16 +294,17 @@ where
                     ru_request::Request {
                         user_id: user_id.clone(),
                         product_id,
+                        decrement_stock,
                     },
                 )
                 .await;
 
             match response {
                 Ok(received_ru_success) => {
-                    // println!(
-                    //     "debug | balancer | ru_request | user removed from basket_id = {}",
-                    //     basket_id
-                    // );
+                    if decrement_stock {
+                        return Ok(());
+                    }
+
                     ru_success = Some((basket_id, received_ru_success));
                 }
 
@@ -336,11 +338,11 @@ where
             }
         }
 
+        if decrement_stock {
+            return Ok(());
+        }
+
         if ru_success.is_none() {
-            // println!(
-            //     "debug | ru_request | user '{}' has been found in no baskets",
-            //     user_id
-            // );
             return Ok(());
         }
 

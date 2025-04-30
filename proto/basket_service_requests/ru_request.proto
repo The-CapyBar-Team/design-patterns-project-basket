@@ -11,6 +11,7 @@ enum FailureStatus {
 message Request {
   string user_id = 1;
   int32 product_id = 2;
+  bool decrement_stock = 3;
 }
 
 message Response {
