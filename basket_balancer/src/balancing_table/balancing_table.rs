@@ -393,10 +393,7 @@ where
                 product_id,
             }) = force_removed_awaiter
             {
-                println!(
-                    "debug | sq_request | ForceRemovedAwaiter received | {:?}",
-                    hp_response
-                );
+                println!("debug | sq_request | ForceRemovedAwaiter received");
 
                 queue_shifts.push(sq_request::QueueShift {
                     user_id: user_id.clone(),
@@ -447,6 +444,7 @@ where
             }
 
             queue_shift_list.push(queue_shifts);
+            println!("PUSHING to queue_shift_list: {:?}", queue_shift_list);
         }
 
         balancing_info.queue_size = balancing_info.queue_size.checked_sub(1).unwrap_or_default();
