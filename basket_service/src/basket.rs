@@ -177,42 +177,26 @@ impl Basket {
             product_context.product_holders, product_context.product_awaiters
         );
 
-        let removed_user_info = if let Some(found_index) = product_context
-            .product_holders
-            .iter()
-            .position(|info| info.user_id == user_id)
-        {
-            println!(
-                "debug | Removal | user with id '{}' found in holders at position {}. About to be removed",
-                user_id, found_index
-            );
-            product_context
+        let removed_user_info =
+            if let Some(found_index) = product_context
                 .product_holders
-                .remove(found_index)
-                .ok_or_else(|| {
-                    println!("debug | Removal | debug error 1");
-                    RuRequestError::DebugError("The found holder should be present".to_owned())
-                })
-        } else if let Some(found_index) = product_context
-            .product_awaiters
-            .iter()
-            .position(|info| info.user_id == user_id)
-        {
-            println!(
-                "debug | Removal | user with id '{}' found in awaiters at position {}. About to be removed",
-                user_id, found_index
-            );
-            product_context
+                .iter()
+                .position(|info| info.user_id == user_id)
+            {
+                product_context.product_holders.remove(found_index).ok_or(
+                    RuRequestError::DebugError("The found holder should be present".to_owned()),
+                )
+            } else if let Some(found_index) = product_context
                 .product_awaiters
-                .remove(found_index)
-                .ok_or_else(|| {
-                    println!("debug | Removal | debug error 2");
-                    RuRequestError::DebugError("The found awaiter should be present".to_owned())
-                })
-        } else {
-            println!("debug | Removal | user with id '{}' not found", user_id);
-            Err(RuRequestError::UserNotFound(product_id, user_id.clone()))
-        }?;
+                .iter()
+                .position(|info| info.user_id == user_id)
+            {
+                product_context.product_awaiters.remove(found_index).ok_or(
+                    RuRequestError::DebugError("The found awaiter should be present".to_owned()),
+                )
+            } else {
+                Err(RuRequestError::UserNotFound(product_id, user_id.clone()))
+            }?;
 
         println!(
             "debug | <RemovalEnding | holders = {:?}, awaiters = {:?}",
@@ -241,14 +225,21 @@ impl Basket {
     }
 
     pub(crate) fn force_remove_primary_awaiter(&mut self, product_id: ProductId) -> Option<UserId> {
+        println!("debug | force_remove_primary_awaiter | trying to remove primary awaiter");
         let product_context = self.product_to_context.get_mut(&product_id)?;
         let front = product_context.product_awaiters.front()?;
 
         if front.queue_position == Some(0) {
-            product_context
+            let front = product_context
                 .product_awaiters
                 .pop_front()
-                .map(|user_info| user_info.user_id)
+                .map(|user_info| user_info.user_id);
+
+            println!(
+                "debug | force_remove_primary_awaiter | success removed: {:?}",
+                front
+            );
+            front
         } else {
             None
         }

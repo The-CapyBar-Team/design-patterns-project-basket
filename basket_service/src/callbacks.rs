@@ -189,6 +189,8 @@ impl basket_service_server::BasketService for BasketContext {
             }
         };
 
+        println!("debug | RU | returning response | {:?}", response);
+
         Ok(Response::new(response))
     }
 
@@ -215,6 +217,7 @@ impl basket_service_server::BasketService for BasketContext {
         );
 
         let force_removed_primary_awaiter = if removed_user_queue_position.is_none() {
+            println!("debug | SQ | removed holder, so removing primary awaiter and shifting");
             basket
                 .force_remove_primary_awaiter(product_id)
                 .map(|primary_id| sq_request::ForceRemovedAwaiter {
@@ -222,6 +225,7 @@ impl basket_service_server::BasketService for BasketContext {
                     product_id,
                 })
         } else {
+            println!("debug | SQ | removed awaiter, so just shifting");
             None
         };
 
@@ -240,6 +244,8 @@ impl basket_service_server::BasketService for BasketContext {
                 })),
             },
         };
+
+        println!("debug | SQ | returning response | {:?}", response);
 
         Ok(Response::new(response))
     }
