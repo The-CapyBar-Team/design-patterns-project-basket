@@ -7,19 +7,18 @@ use basket_communication::basket_service::basket_service_server;
 use basket_communication::basket_service::{
     ap_request, hp_request, ru_request, sq_request, ups_request,
 };
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
 
 pub(crate) struct BasketContext {
-    basket: Mutex<Basket>,
+    basket: Arc<Mutex<Basket>>,
 }
 
 impl BasketContext {
     #[inline(always)]
-    pub(crate) fn new(basket: Basket) -> Self {
-        Self {
-            basket: Mutex::new(basket),
-        }
+    pub(crate) fn new(basket: Arc<Mutex<Basket>>) -> Self {
+        Self { basket }
     }
 }
 
@@ -75,10 +74,11 @@ impl basket_service_server::BasketService for BasketContext {
         drop(basket);
 
         let response = match holding_result {
-            Ok(()) => hp_request::Response {
+            Ok(acquisition_time) => hp_request::Response {
                 response: Some(Success(hp_request::Success {
                     user_id: user_id.clone(),
                     product_id,
+                    acquisition_time,
                 })),
             },
             Err(err) => hp_request::Response {

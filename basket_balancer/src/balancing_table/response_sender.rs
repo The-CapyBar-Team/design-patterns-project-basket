@@ -3,7 +3,6 @@ use basket_communication::rabbit::sender::RabbitSender;
 
 pub(crate) struct ResponseSender {
     queue_position_update_message_sender: RabbitSender<external::QueuePositionUpdateMessage>,
-    lost_product_sender: RabbitSender<external::LostProduct>,
     product_status_update_sender: RabbitSender<external::ProductStatusUpdate>,
     decrease_stock_request_sender: RabbitSender<external::DecreaseStockRequest>,
 }
@@ -12,13 +11,11 @@ impl ResponseSender {
     #[inline(always)]
     pub(crate) fn new(
         queue_position_update_message_sender: RabbitSender<external::QueuePositionUpdateMessage>,
-        lost_product_sender: RabbitSender<external::LostProduct>,
         product_status_update_sender: RabbitSender<external::ProductStatusUpdate>,
         decrease_stock_request_sender: RabbitSender<external::DecreaseStockRequest>,
     ) -> Self {
         Self {
             queue_position_update_message_sender,
-            lost_product_sender,
             product_status_update_sender,
             decrease_stock_request_sender,
         }
@@ -34,15 +31,6 @@ impl ResponseSender {
             .send_message(message)
             .await
             .map_err(|err| log_error("QueuePositionUpdateMessage", err));
-    }
-
-    #[inline(always)]
-    pub(crate) async fn send_lost_product(&mut self, message: external::LostProduct) {
-        let _ = self
-            .lost_product_sender
-            .send_message(message)
-            .await
-            .map_err(|err| log_error("LostProduct", err));
     }
 
     #[inline(always)]

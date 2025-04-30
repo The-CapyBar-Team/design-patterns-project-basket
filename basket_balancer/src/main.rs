@@ -3,6 +3,7 @@ use crate::basket_pool::basket_pool::wait_until_basket_is_ready;
 use crate::listeners::*;
 use crate::requests::BasicRequestSender;
 use balancing_table::balancing_table::BalancingTable;
+use basket_communication::retry_and_report_error;
 use basket_communication::{
     basket_balancer::basket_balancer_server::BasketBalancerServer, rabbit::sender::RabbitSender,
 };
@@ -11,7 +12,6 @@ use basket_set::vec_balancing_set::VecBalancingSet;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Server;
-use utilities::retry_and_report_error;
 
 mod balancing_table;
 mod basket_pool;
@@ -28,14 +28,6 @@ async fn create_response_sender(rabbit_connection_string: String) -> Arc<Mutex<R
         let connection_string = rabbit_connection_string.clone();
         retry_and_report_error(async move || {
             RabbitSender::new(&connection_string, "QueuePositionUpdates").await
-        })
-        .await
-    };
-
-    let lost_product_sender = {
-        let connection_string = rabbit_connection_string.clone();
-        retry_and_report_error(async move || {
-            RabbitSender::new(&connection_string, "LostProducts").await
         })
         .await
     };
@@ -58,7 +50,6 @@ async fn create_response_sender(rabbit_connection_string: String) -> Arc<Mutex<R
 
     Arc::new(Mutex::new(ResponseSender::new(
         queue_position_update_message_sender,
-        lost_product_sender,
         product_status_update_sender,
         decrease_stock_request_sender,
     )))
@@ -137,12 +128,30 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    let eh_request_listener = tokio::spawn({
+        let connection_string = rabbit_connection_string.clone();
+        let balancing_table = balancing_table.clone();
+
+        let lost_product_sender = {
+            let connection_string = rabbit_connection_string.clone();
+            retry_and_report_error(async move || {
+                RabbitSender::new(&connection_string, "LostProducts").await
+            })
+            .await
+        };
+
+        async move {
+            eh_request::listener(connection_string, balancing_table, lost_product_sender).await;
+        }
+    });
+
     add_to_cart_request_listener.await?;
     buy_product_request_listener.await?;
     product_status_request_listener.await?;
     remove_from_cart_request_listener.await?;
     product_stock_list_listener.await?;
     grpc_server_handle.await?;
+    eh_request_listener.await?;
 
     Ok(())
 }

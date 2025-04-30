@@ -20,6 +20,7 @@ where
 {
     basket_balancer: BasketBalancer,
     queue_size: QueuePosition,
+    available_stock: ProductStock,
 }
 
 pub(crate) struct BalancingTable<RequestSender, BasketBalancer>
@@ -99,16 +100,16 @@ where
             .get_mut(&product_id)
         {
             balancing_info.basket_balancer = basket_balancer;
+            balancing_info.available_stock += stock;
         } else {
             let replaced_balancing_info = self.products_to_balancing_info.lock().await.insert(
                 product_id,
                 ProductBalancingInfo {
                     basket_balancer,
                     queue_size: 0,
+                    available_stock: stock,
                 },
             );
-
-            debug_assert!(replaced_balancing_info.is_none());
         }
     }
 
@@ -124,8 +125,8 @@ where
             .ok_or(BalancerError::ProductNotFound(product_id, user_id.clone()))?;
 
         while let Some(next_basket_id) = {
-            self.synchronize_with_global_basket_set(balancing_info)
-                .await;
+            // self.synchronize_with_global_basket_set(balancing_info)
+            //     .await;
             balancing_info.basket_balancer.choose_next_basket()
         } {
             let hp_response = self
@@ -145,7 +146,13 @@ where
                 Ok(hp_request::Success {
                     user_id,
                     product_id,
+                    acquisition_time,
                 }) => {
+                    balancing_info.available_stock = balancing_info
+                        .available_stock
+                        .checked_sub(1)
+                        .unwrap_or_default();
+
                     self.response_sender
                         .lock()
                         .await
@@ -154,7 +161,7 @@ where
                             update_message: Some(external::QueuePositionUpdate {
                                 product_id,
                                 queue_position: None,
-                                acquisition_time: None,
+                                acquisition_time: Some(acquisition_time),
                             }),
                         })
                         .await;
@@ -310,12 +317,7 @@ where
 
                 Err(GrpcFailure::Custom(ru_request::Failure { status })) => {
                     match ru_request::FailureStatus::from_i32(status) {
-                        Some(ru_request::FailureStatus::UserNotFound) => {
-                            // println!(
-                            //     "debug | balancer | ru_request | user not found for basket_id = {}",
-                            //     basket_id
-                            // );
-                        }
+                        Some(ru_request::FailureStatus::UserNotFound) => {}
                         Some(ru_request::FailureStatus::ProductNotFound) => {
                             println!("!<>! RemoveFromCartRequest | ProductNotFound");
                         }
@@ -364,6 +366,8 @@ where
             .add_basket_id(remover_basket_id);
 
         let mut queue_shift_list = Vec::new();
+        let mut force_remove_occured = false;
+        let holder_was_removed = removed_user_queue_position.is_none();
 
         for &basket_id in present_basket_ids.iter() {
             let sq_response = request_sender
@@ -374,13 +378,7 @@ where
                 force_removed_awaiter,
                 mut queue_shifts,
             } = match sq_response {
-                Ok(sq_success) => {
-                    // println!(
-                    //     "debug | sq_request | received success from basket #{} | {:?}",
-                    //     basket_id, sq_success
-                    // );
-                    sq_success
-                }
+                Ok(sq_success) => sq_success,
                 Err(sq_error) => {
                     println!(
                         "!<>! | sq_request | basket_id = {} | {:?}",
@@ -390,14 +388,12 @@ where
                 }
             };
 
-            // println!("GOING FORWARD BASKET #{}", basket_id);
-
             if let Some(sq_request::ForceRemovedAwaiter {
                 user_id,
                 product_id,
             }) = force_removed_awaiter
             {
-                // println!("debug | sq_request | ForceRemovedAwaiter received");
+                force_remove_occured = true;
 
                 queue_shifts.push(sq_request::QueueShift {
                     user_id: user_id.clone(),
@@ -416,10 +412,6 @@ where
 
                 match hp_response {
                     Ok(_) => {
-                        // println!(
-                        //     "debug | sq_request | hp_request successful | {:?}",
-                        //     hp_response
-                        // );
                         balancing_info
                             .basket_balancer
                             .remove_basket_id(remover_basket_id);
@@ -439,14 +431,13 @@ where
                         println!("!<>! Removal | hp_request | internal grpc error");
                     }
                 }
-            } else {
-                // println!(
-                //     "debug | sq_request | no force-removed user found for basket #{}",
-                //     basket_id
-                // );
             }
 
             queue_shift_list.push(queue_shifts);
+        }
+
+        if !force_remove_occured && holder_was_removed {
+            balancing_info.available_stock += 1;
         }
 
         balancing_info.queue_size = balancing_info.queue_size.checked_sub(1).unwrap_or_default();

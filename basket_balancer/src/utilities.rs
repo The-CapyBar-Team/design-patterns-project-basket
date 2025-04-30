@@ -14,17 +14,3 @@ pub(crate) const fn parse_u8(s: &str) -> u8 {
 
     result
 }
-
-pub(crate) async fn retry_and_report_error<F, R, E>(action: F) -> R
-where
-    F: AsyncFn() -> Result<R, E>,
-    E: std::error::Error,
-{
-    loop {
-        match action().await {
-            Ok(result) => return result,
-            Err(error) => println!("Retry Error: {}", error),
-        }
-        std::thread::sleep(std::time::Duration::from_secs(2));
-    }
-}

@@ -23,6 +23,7 @@ message Response {
 message Success {
   string user_id = 1;
   int32 product_id = 2;
+	uint64 acquisitionTime = 3;
 }
 
 message Failure {

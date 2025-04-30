@@ -1,7 +1,10 @@
 use crate::error::{ApRequestError, HpRequestError, RuRequestError};
+use basket_communication::basket_balancer::eh_request;
 use basket_communication::basket_service_requests::sq_request::QueueShift;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
 use std::collections::{HashMap, VecDeque};
+
+pub(crate) type Timestamp = u64;
 
 // TODO: think of replacing VecDeque with HashMap
 
@@ -10,6 +13,7 @@ use std::collections::{HashMap, VecDeque};
 struct UserInfo {
     user_id: UserId,
     queue_position: Option<QueuePosition>,
+    created_at_ts: Option<Timestamp>,
 }
 
 struct ProductContext {
@@ -25,8 +29,6 @@ pub(crate) struct HaRemovalResult {
 
 pub(crate) struct Basket {
     product_to_context: HashMap<ProductId, ProductContext>,
-    on_product_stock_changed:
-        Box<dyn Fn(ProductId, ProductStock, ProductStock) + Send + Sync + 'static>,
 }
 
 impl Default for ProductContext {
@@ -41,12 +43,9 @@ impl Default for ProductContext {
 
 impl Basket {
     #[inline(always)]
-    pub(crate) fn new(
-        on_product_stock_changed: impl Fn(ProductId, ProductStock, ProductStock) + Send + Sync + 'static,
-    ) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             product_to_context: Default::default(),
-            on_product_stock_changed: Box::new(on_product_stock_changed),
         }
     }
 
@@ -71,8 +70,6 @@ impl Basket {
                 .map(|context| context.product_stock)
                 .unwrap_or(0)
         };
-
-        (self.on_product_stock_changed)(product_id, old_stock, old_stock + product_stock_increase);
     }
 
     #[inline(always)]
@@ -80,7 +77,7 @@ impl Basket {
         &mut self,
         product_id: ProductId,
         holder_id: UserId,
-    ) -> Result<(), HpRequestError> {
+    ) -> Result<Timestamp, HpRequestError> {
         let product_context =
             self.product_to_context
                 .get_mut(&product_id)
@@ -104,12 +101,15 @@ impl Basket {
             ));
         }
 
+        let acquisition_time = current_timestamp();
+
         product_context.product_holders.push_back(UserInfo {
             user_id: holder_id,
             queue_position: None,
+            created_at_ts: Some(acquisition_time),
         });
 
-        Ok(())
+        Ok(acquisition_time)
     }
 
     #[inline(always)]
@@ -152,6 +152,7 @@ impl Basket {
         product_context.product_awaiters.push_back(UserInfo {
             user_id: awaiter_id,
             queue_position: Some(queue_position),
+            created_at_ts: None,
         });
 
         Ok(())
@@ -271,6 +272,31 @@ impl Basket {
         product_context.product_holders.len() < product_context.product_stock as usize
     }
 
+    #[inline(always)]
+    pub(crate) fn get_expired_holders(&self, current_ts: Timestamp) -> eh_request::Request {
+        const EXPIRATION_TIME_SECONDS: Timestamp = 30;
+        let mut expired_holders = Vec::new();
+        for (&product_id, product_context) in self.product_to_context.iter() {
+            let (product_holders, _) = product_context.product_holders.as_slices();
+
+            for product_holder in product_holders {
+                if current_ts
+                    < product_holder.created_at_ts.unwrap_or(Timestamp::MAX)
+                        + EXPIRATION_TIME_SECONDS
+                {
+                    break;
+                }
+
+                expired_holders.push(eh_request::ExpiredHolder {
+                    product_id,
+                    user_id: product_holder.user_id.clone(),
+                });
+            }
+        }
+
+        eh_request::Request { expired_holders }
+    }
+
     #[cfg(test)]
     pub(crate) fn product_context(
         &self,
@@ -307,6 +333,17 @@ fn create_contiguous_users_deque() -> VecDeque<UserInfo> {
     let mut deque = VecDeque::default();
     deque.make_contiguous();
     deque
+}
+
+#[inline(always)]
+pub(crate) fn current_timestamp() -> Timestamp {
+    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
+
+    let now = SystemTime::now();
+    let duration_since_epoch = now.duration_since(UNIX_EPOCH).expect("Time went backwards");
+    let seconds = duration_since_epoch.as_secs();
+    seconds
 }
 
 #[cfg(test)]
