@@ -400,10 +400,7 @@ where
                     new_queue_position: None,
                 });
 
-                let hp_response = self
-                    .request_sender
-                    .lock()
-                    .await
+                let hp_response = request_sender
                     .perform_hp_request(
                         remover_basket_id,
                         hp_request::Request {
