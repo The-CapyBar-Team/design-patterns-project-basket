@@ -225,8 +225,11 @@ impl Basket {
     }
 
     pub(crate) fn force_remove_primary_awaiter(&mut self, product_id: ProductId) -> Option<UserId> {
-        println!("debug | force_remove_primary_awaiter | trying to remove primary awaiter");
         let product_context = self.product_to_context.get_mut(&product_id)?;
+        println!(
+            "debug | force_remove_primary_awaiter | trying to remove primary awaiter: {:?}",
+            product_context.product_awaiters.front()
+        );
         let front = product_context.product_awaiters.front()?;
 
         if front.queue_position == Some(0) {
