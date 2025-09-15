@@ -48,12 +48,6 @@ pub(crate) enum RuRequestError {
 
     #[error("Removal DebugError: {0}")]
     DebugError(String),
-
-    #[cfg(feature = "extra_protection")]
-    #[error(
-        "Trying to make holders of some awaiters for product with id {0} when holders list is full"
-    )]
-    UnableToDequeueAwaiter(ProductId),
 }
 
 pub(crate) struct LocallyLoggedError<Error> {
@@ -97,8 +91,5 @@ pub(crate) fn ru_request_error_to_status(
         RuRequestError::ProductNotFound(_, _) => Ok(ProtoStatus::ProductNotFound),
         RuRequestError::UserNotFound(_, _) => Ok(ProtoStatus::UserNotFound),
         RuRequestError::DebugError(_) => Err(LocallyLoggedError { error }),
-
-        #[cfg(feature = "extra_protection")]
-        RuRequestError::UnableToDequeueAwaiter(_) => Err(LocallyLoggedError { error }),
     }
 }

@@ -71,7 +71,7 @@ message ProductStatusUpdate {
 message QueuePositionUpdate {
 	int32 productId = 1;
 	optional uint32 queuePosition = 2;
-	optional int64 acquisitionTime = 3;
+	optional uint64 acquisitionTime = 3;
 }
 
 // APIGateway -> BasketLoadBalancer

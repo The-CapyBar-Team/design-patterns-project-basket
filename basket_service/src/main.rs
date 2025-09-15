@@ -5,12 +5,16 @@ use basket_communication::basket_balancer_requests::cb_request::ConnectionStatus
 use basket_communication::basket_service::basket_service_server::BasketServiceServer;
 use callbacks::*;
 use std::env;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tonic::transport::Server;
 use tonic::Request;
 
 mod basket;
 mod callbacks;
 mod error;
+mod product_status_request_handler;
+mod timeout_cleaner;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -23,9 +27,13 @@ async fn main() -> anyhow::Result<()> {
     let basket_service_uri = env::var("BASKET_SERVICE_URI").expect("BASKET_SERVICE_URI not found.");
     let basket_balancer_uri =
         env::var("BASKET_BALANCER_URI").expect("BASKET_BALANCER_URI not found.");
+    let basket = Arc::new(Mutex::new(Basket::new()));
+    let server_basket_handle = basket.clone();
+    let timeout_cleaner_basket_handle = basket.clone();
+    let third_handle = basket.clone();
 
     let server_handle = tokio::spawn(async move {
-        let basket_context = BasketContext::new(Basket::new(|_, _, _| {}));
+        let basket_context = BasketContext::new(server_basket_handle);
         let addr = format!("[::]:{}", port).parse().expect("Invalid address");
 
         println!("Server listening on {}", addr);
@@ -82,8 +90,18 @@ async fn main() -> anyhow::Result<()> {
         println!("Basket #{} connected to balancer.", basket_id);
     });
 
+    let timeout_cleaner = tokio::spawn(async move {
+        timeout_cleaner::timeout_cleaner(timeout_cleaner_basket_handle).await;
+    });
+
+    let product_status_request_handler = tokio::spawn(async move {
+        product_status_request_handler::product_status_request_handler(basket_id, third_handle)
+            .await;
+    });
+
     server_handle.await?;
     cb_client_handle.await?;
+    timeout_cleaner.await?;
 
     Ok(())
 }

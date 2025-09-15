@@ -12,6 +12,7 @@ fn main() {
         "basket_service_requests/ru_request.proto",
         "basket_service_requests/sq_request.proto",
         "basket_balancer_requests/cb_request.proto",
+        "basket_balancer_requests/eh_request.proto",
         "basket_service.proto",
         "basket_balancer.proto",
         "external.proto",

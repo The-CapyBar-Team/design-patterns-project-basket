@@ -48,10 +48,10 @@ async fn main() -> anyhow::Result<()> {
         match delivery {
             Ok(delivery) => {
                 if let Err(e) = handle_message(&channel, delivery).await {
-                    eprintln!("Failed to handle message: {}", e);
+                    println!("Failed to handle message: {}", e);
                 }
             }
-            Err(e) => eprintln!("Error while consuming message: {}", e),
+            Err(e) => println!("Error while consuming message: {}", e),
         }
     }
 

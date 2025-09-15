@@ -1,16 +1,16 @@
 use crate::BalancingTable;
 use crate::basket_pool::basket_pool::wait_until_basket_is_ready;
 use crate::requests;
-use crate::utilities::retry_and_report_error;
 use basket_communication::external::BuyProductRequest;
 use basket_communication::rabbit::listener::RabbitListener;
+use basket_communication::retry_and_report_error;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[inline(always)]
 pub(crate) async fn listener<RequestSender, BasketBalancer>(
     rabbit_connection_string: String,
-    _balancing_table: Arc<Mutex<BalancingTable<RequestSender, BasketBalancer>>>,
+    balancing_table: Arc<Mutex<BalancingTable<RequestSender, BasketBalancer>>>,
 ) where
     RequestSender: requests::RequestSender + Send,
     BasketBalancer: Default
@@ -26,9 +26,26 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
 
     wait_until_basket_is_ready().await;
 
+    let balancing_table = balancing_table.clone();
+
     ups_rabbit_listener
-        .listen_to_messages(async |message| {
-            println!("Rabbit | BuyProductRequest: {:?}", message);
-        })
+        .listen_to_messages(
+            async move |BuyProductRequest {
+                            user_id,
+                            product_id,
+                        }| {
+                let mut balancing_table = balancing_table.lock().await;
+                if let Err(err) = balancing_table
+                    .remove_product_from_basket(product_id, user_id.clone(), true)
+                    .await
+                {
+                    println!("!<>! | BuyProductRequest | {}", err);
+                    return;
+                }
+                balancing_table
+                    .send_decrease_stock_request(product_id, user_id)
+                    .await;
+            },
+        )
         .await;
 }

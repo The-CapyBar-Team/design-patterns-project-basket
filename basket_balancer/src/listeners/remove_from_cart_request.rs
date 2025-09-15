@@ -1,9 +1,9 @@
 use crate::BalancingTable;
 use crate::basket_pool::basket_pool::wait_until_basket_is_ready;
 use crate::requests;
-use crate::utilities::retry_and_report_error;
 use basket_communication::external::RemoveFromCartRequest;
 use basket_communication::rabbit::listener::RabbitListener;
+use basket_communication::retry_and_report_error;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -37,11 +37,14 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
                             user_id,
                             product_id,
                         }| {
-                balancing_table
+                if let Err(err) = balancing_table
                     .lock()
                     .await
-                    .remove_product_from_basket(product_id, user_id)
-                    .await;
+                    .remove_product_from_basket(product_id, user_id, false)
+                    .await
+                {
+                    println!("!<>! | RemoveFromCartRequest | {}", err);
+                }
             },
         )
         .await;

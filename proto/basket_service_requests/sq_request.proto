@@ -8,8 +8,7 @@ enum FailureStatus {
 
 message Request {
   int32 product_id = 1;
-  uint32 max_removed_queue_position = 2;
-  uint32 shift = 3;
+  optional uint32 removed_user_queue_position = 2; // None if holder was removed but we still need to call the request to rearrange awaiters from other baskets
 }
 
 message Response {
@@ -24,10 +23,16 @@ message QueueShift {
   optional uint32 new_queue_position = 2;
 }
 
+message ForceRemovedAwaiter {
+  string user_id = 1;
+  int32 product_id = 2;
+}
+
 message Success {
+  optional ForceRemovedAwaiter force_removed_awaiter = 1; // returns the force-removed awaiter in case we asked to remove one
   repeated QueueShift queue_shifts = 2;
 }
 
 message Failure {
-  FailureStatus status = 2;
+  FailureStatus status = 1;
 }

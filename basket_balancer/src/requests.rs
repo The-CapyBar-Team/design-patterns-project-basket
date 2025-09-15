@@ -5,6 +5,7 @@ use basket_communication::basket_service::{
 };
 use std::sync::Arc;
 
+#[derive(Debug)]
 pub(crate) enum GrpcFailure<CustomError> {
     Custom(CustomError),
     Internal,

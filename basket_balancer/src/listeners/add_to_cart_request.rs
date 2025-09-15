@@ -1,9 +1,9 @@
 use crate::BalancingTable;
 use crate::basket_pool::basket_pool::wait_until_basket_is_ready;
 use crate::requests;
-use crate::utilities::retry_and_report_error;
 use basket_communication::external::AddToCartRequest;
 use basket_communication::rabbit::listener::RabbitListener;
+use basket_communication::retry_and_report_error;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -32,17 +32,13 @@ pub(crate) async fn listener<RequestSender, BasketBalancer>(
                             user_id,
                             product_id,
                         }| {
-                println!(
-                    "debug | balancer | received AddToCartRequest: user_id = {}, product_id = {}",
-                    user_id, product_id
-                );
                 if let Err(hap_error) = balancing_table
                     .lock()
                     .await
                     .add_product_to_basket(product_id, user_id)
                     .await
                 {
-                    eprintln!("!<>! Adding to cart error: {}", hap_error);
+                    println!("!<>! Adding to cart error: {}", hap_error);
                 }
             },
         )

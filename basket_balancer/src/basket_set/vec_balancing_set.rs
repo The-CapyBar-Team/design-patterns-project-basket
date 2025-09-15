@@ -37,10 +37,6 @@ impl BasketSet for VecBalancingSet {
             .position(|&found_basket_id| found_basket_id == basket_id)
         {
             self.available_baskets.swap_remove(position);
-            println!(
-                "REMOVE | basket_id = {}, current_list = {:?}",
-                basket_id, self.available_baskets
-            );
         }
     }
 
@@ -65,7 +61,7 @@ impl BasketBalancer for VecBalancingSet {
         } else {
             let mut rng = rand::thread_rng();
             let ndx = rng.gen_range(0..self.available_baskets.len());
-            Some(self.available_baskets[rng.gen_range(0..self.available_baskets.len())])
+            Some(self.available_baskets[ndx])
         }
     }
 
@@ -73,6 +69,5 @@ impl BasketBalancer for VecBalancingSet {
     fn intersect(&mut self, other: &Self) {
         self.available_baskets
             .retain(|&basket_id| other.contains(basket_id));
-        println!("INTERSECT | current_list = {:?}", self.available_baskets);
     }
 }

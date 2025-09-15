@@ -1,15 +1,20 @@
 use crate::error::{ApRequestError, HpRequestError, RuRequestError};
-use basket_communication::basket_service::ru_request::QueueShift;
+use basket_communication::basket_balancer::eh_request;
+use basket_communication::basket_service_requests::sq_request::QueueShift;
+use basket_communication::external;
 use basket_communication::types::{ProductId, ProductStock, QueuePosition, UserId};
 use std::collections::{HashMap, VecDeque};
 
+pub(crate) type Timestamp = u64;
+
 // TODO: think of replacing VecDeque with HashMap
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 struct UserInfo {
     user_id: UserId,
     queue_position: Option<QueuePosition>,
+    created_at_ts: Option<Timestamp>,
 }
 
 struct ProductContext {
@@ -18,21 +23,13 @@ struct ProductContext {
     product_stock: ProductStock,
 }
 
-struct FillAvailableHolderSlotResult {
-    new_holder_id: UserId,
-    its_old_queue_position: QueuePosition,
-}
-
 pub(crate) struct HaRemovalResult {
     pub(crate) removed_user_id: UserId,
     pub(crate) removed_user_queue_position: Option<QueuePosition>,
-    pub(crate) queue_shifts: Vec<QueueShift>,
 }
 
 pub(crate) struct Basket {
     product_to_context: HashMap<ProductId, ProductContext>,
-    on_product_stock_changed:
-        Box<dyn Fn(ProductId, ProductStock, ProductStock) + Send + Sync + 'static>,
 }
 
 impl Default for ProductContext {
@@ -47,12 +44,9 @@ impl Default for ProductContext {
 
 impl Basket {
     #[inline(always)]
-    pub(crate) fn new(
-        on_product_stock_changed: impl Fn(ProductId, ProductStock, ProductStock) + Send + Sync + 'static,
-    ) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             product_to_context: Default::default(),
-            on_product_stock_changed: Box::new(on_product_stock_changed),
         }
     }
 
@@ -77,8 +71,6 @@ impl Basket {
                 .map(|context| context.product_stock)
                 .unwrap_or(0)
         };
-
-        (self.on_product_stock_changed)(product_id, old_stock, old_stock + product_stock_increase);
     }
 
     #[inline(always)]
@@ -86,7 +78,7 @@ impl Basket {
         &mut self,
         product_id: ProductId,
         holder_id: UserId,
-    ) -> Result<(), HpRequestError> {
+    ) -> Result<Timestamp, HpRequestError> {
         let product_context =
             self.product_to_context
                 .get_mut(&product_id)
@@ -110,12 +102,15 @@ impl Basket {
             ));
         }
 
+        let acquisition_time = current_timestamp();
+
         product_context.product_holders.push_back(UserInfo {
             user_id: holder_id,
             queue_position: None,
+            created_at_ts: Some(acquisition_time),
         });
 
-        Ok(())
+        Ok(acquisition_time)
     }
 
     #[inline(always)]
@@ -158,6 +153,7 @@ impl Basket {
         product_context.product_awaiters.push_back(UserInfo {
             user_id: awaiter_id,
             queue_position: Some(queue_position),
+            created_at_ts: None,
         });
 
         Ok(())
@@ -172,6 +168,7 @@ impl Basket {
         &mut self,
         product_id: ProductId,
         user_id: UserId,
+        decrement_stock: bool,
     ) -> Result<HaRemovalResult, RuRequestError> {
         let product_context = self
             .product_to_context
@@ -199,79 +196,16 @@ impl Basket {
                 Err(RuRequestError::UserNotFound(product_id, user_id.clone()))
             }?;
 
-        let queue_shifts = if let Some(removed_awaiter_position) = removed_user_info.queue_position
-        {
-            let queue_shifts =
-                Self::shift_queue_positions(product_context, removed_awaiter_position, 1);
-            queue_shifts
-        } else {
-            // Holder removed
-            let queue_shifts = if let Some(FillAvailableHolderSlotResult {
-                new_holder_id,
-                its_old_queue_position,
-            }) =
-                Self::fill_available_holder_slot(product_id, product_context)?
-            {
-                let mut queue_shifts =
-                    Self::shift_queue_positions(product_context, its_old_queue_position, 1);
-                queue_shifts.push(QueueShift {
-                    user_id: new_holder_id,
-                    new_queue_position: None,
-                });
-
-                queue_shifts
-            } else {
-                Vec::default()
-            };
-
-            queue_shifts
-        };
+        if decrement_stock {
+            if let Some(new_stock) = product_context.product_stock.checked_sub(1) {
+                product_context.product_stock = new_stock;
+            }
+        }
 
         Ok(HaRemovalResult {
             removed_user_id: removed_user_info.user_id,
             removed_user_queue_position: removed_user_info.queue_position,
-            queue_shifts,
         })
-    }
-
-    // TODO: we could optimize this by providing the function that returns a single element
-    // if we know that we have only one free slot (prevent vec allocation)
-    #[inline(always)]
-    fn fill_available_holder_slot(
-        product_id: ProductId,
-        product_context: &mut ProductContext,
-    ) -> Result<Option<FillAvailableHolderSlotResult>, RuRequestError> {
-        #[cfg(feature = "extra_protection")]
-        if !Self::can_hold(product_context) {
-            return Err(RuRequestError::UnableToDequeueAwaiter(product_id));
-        }
-
-        let old_awaiter_info = product_context
-            .product_awaiters
-            .pop_front()
-            .map(|info| UserInfo {
-                user_id: info.user_id,
-                queue_position: None,
-            });
-
-        let old_awaiter_info = if let Some(old_awaiter_info) = old_awaiter_info {
-            let new_holder_info = old_awaiter_info.clone();
-            product_context.product_holders.push_back(new_holder_info);
-            Some(old_awaiter_info)
-        } else {
-            None
-        };
-
-        if let Some(old_awaiter_info) = old_awaiter_info {
-            Ok(Some(FillAvailableHolderSlotResult {
-                new_holder_id: old_awaiter_info.user_id,
-                its_old_queue_position: old_awaiter_info.queue_position.ok_or(
-                    RuRequestError::DebugError("The found awaiter should be present".to_owned()),
-                )?,
-            }))
-        } else {
-            Ok(None)
-        }
     }
 
     #[inline(always)]
@@ -289,6 +223,21 @@ impl Basket {
         ))
     }
 
+    pub(crate) fn force_remove_primary_awaiter(&mut self, product_id: ProductId) -> Option<UserId> {
+        let product_context = self.product_to_context.get_mut(&product_id)?;
+        let front = product_context.product_awaiters.front()?;
+
+        if front.queue_position == Some(0) {
+            let front = product_context
+                .product_awaiters
+                .pop_front()
+                .map(|user_info| user_info.user_id);
+            front
+        } else {
+            None
+        }
+    }
+
     #[inline(always)]
     fn shift_queue_positions(
         product_context: &mut ProductContext,
@@ -301,7 +250,7 @@ impl Basket {
         for awaiter_info in product_context.product_awaiters.iter_mut() {
             // TODO: add better overflow protection!
             if let Some(queue_position) = awaiter_info.queue_position.as_mut() {
-                if max_removed_queue_position <= max_removed_queue_position {
+                if *queue_position <= max_removed_queue_position {
                     continue;
                 }
 
@@ -319,6 +268,64 @@ impl Basket {
         queue_shifts
     }
 
+    #[inline(always)]
+    fn can_hold(product_context: &ProductContext) -> bool {
+        product_context.product_holders.len() < product_context.product_stock as usize
+    }
+
+    #[inline(always)]
+    pub(crate) fn get_expired_holders(&self, current_ts: Timestamp) -> eh_request::Request {
+        const EXPIRATION_TIME_SECONDS: Timestamp = 600;
+        let mut expired_holders = Vec::new();
+        for (&product_id, product_context) in self.product_to_context.iter() {
+            let (product_holders, _) = product_context.product_holders.as_slices();
+
+            for product_holder in product_holders {
+                if current_ts
+                    < product_holder.created_at_ts.unwrap_or(Timestamp::MAX)
+                        + EXPIRATION_TIME_SECONDS
+                {
+                    break;
+                }
+
+                expired_holders.push(eh_request::ExpiredHolder {
+                    product_id,
+                    user_id: product_holder.user_id.clone(),
+                });
+            }
+        }
+
+        eh_request::Request { expired_holders }
+    }
+
+    #[inline(always)]
+    pub(crate) fn restore_basket_for_user(
+        &self,
+        user_id: UserId,
+    ) -> Vec<external::QueuePositionUpdate> {
+        let mut result = Vec::new();
+        for (&product_id, product_context) in self.product_to_context.iter() {
+            if let Some(UserInfo {
+                user_id,
+                queue_position,
+                created_at_ts,
+            }) = product_context
+                .product_holders
+                .iter()
+                .chain(product_context.product_awaiters.iter())
+                .find(|&info| info.user_id == user_id)
+            {
+                result.push(external::QueuePositionUpdate {
+                    product_id,
+                    queue_position: *queue_position,
+                    acquisition_time: *created_at_ts,
+                });
+            }
+        }
+
+        result
+    }
+
     #[cfg(test)]
     pub(crate) fn product_context(
         &self,
@@ -334,11 +341,6 @@ impl Basket {
                 )
             })
             .map(|((holders, _), (awaiters, _), stock)| (holders, awaiters, stock))
-    }
-
-    #[inline(always)]
-    fn can_hold(product_context: &ProductContext) -> bool {
-        product_context.product_holders.len() < product_context.product_stock as usize
     }
 
     #[inline(always)]
@@ -360,6 +362,17 @@ fn create_contiguous_users_deque() -> VecDeque<UserInfo> {
     let mut deque = VecDeque::default();
     deque.make_contiguous();
     deque
+}
+
+#[inline(always)]
+pub(crate) fn current_timestamp() -> Timestamp {
+    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
+
+    let now = SystemTime::now();
+    let duration_since_epoch = now.duration_since(UNIX_EPOCH).expect("Time went backwards");
+    let seconds = duration_since_epoch.as_secs();
+    seconds
 }
 
 #[cfg(test)]

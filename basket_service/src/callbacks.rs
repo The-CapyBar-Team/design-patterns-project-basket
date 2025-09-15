@@ -7,19 +7,18 @@ use basket_communication::basket_service::basket_service_server;
 use basket_communication::basket_service::{
     ap_request, hp_request, ru_request, sq_request, ups_request,
 };
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
 
 pub(crate) struct BasketContext {
-    basket: Mutex<Basket>,
+    basket: Arc<Mutex<Basket>>,
 }
 
 impl BasketContext {
     #[inline(always)]
-    pub(crate) fn new(basket: Basket) -> Self {
-        Self {
-            basket: Mutex::new(basket),
-        }
+    pub(crate) fn new(basket: Arc<Mutex<Basket>>) -> Self {
+        Self { basket }
     }
 }
 
@@ -47,7 +46,7 @@ impl basket_service_server::BasketService for BasketContext {
             product_stock_increase,
         } = request.into_inner();
 
-        println!("debug | basket_service | received ups request: product_id = {}, product_stock_increase = {}", product_id, product_stock_increase);
+        // println!("debug | basket_service | received ups request: product_id = {}, product_stock_increase = {}", product_id, product_stock_increase);
 
         let mut basket = self.basket.lock().await;
         basket.update_product_stock(product_id, product_stock_increase);
@@ -75,10 +74,11 @@ impl basket_service_server::BasketService for BasketContext {
         drop(basket);
 
         let response = match holding_result {
-            Ok(()) => hp_request::Response {
+            Ok(acquisition_time) => hp_request::Response {
                 response: Some(Success(hp_request::Success {
                     user_id: user_id.clone(),
                     product_id,
+                    acquisition_time,
                 })),
             },
             Err(err) => hp_request::Response {
@@ -125,7 +125,7 @@ impl basket_service_server::BasketService for BasketContext {
                 })),
             },
             Err(Err(LocallyLoggedError { error })) => {
-                eprintln!(
+                println!(
                     "!<>! | basket_service | AP | locally logged error | {}",
                     error
                 );
@@ -152,22 +152,22 @@ impl basket_service_server::BasketService for BasketContext {
         let ru_request::Request {
             user_id,
             product_id,
+            decrement_stock,
         } = request.into_inner();
 
         let mut basket = self.basket.lock().await;
-        let removal_result = basket.remove_holder_or_awaiter_of_product(product_id, user_id);
+        let removal_result =
+            basket.remove_holder_or_awaiter_of_product(product_id, user_id, decrement_stock);
         drop(basket);
 
         let response = match removal_result.map_err(ru_request_error_to_status) {
             Ok(HaRemovalResult {
                 removed_user_id,
                 removed_user_queue_position,
-                queue_shifts,
             }) => ru_request::Response {
                 response: Some(Success(ru_request::Success {
                     removed_user_id,
                     removed_user_queue_position,
-                    queue_shifts,
                 })),
             },
 
@@ -178,7 +178,7 @@ impl basket_service_server::BasketService for BasketContext {
             },
 
             Err(Err(LocallyLoggedError { error })) => {
-                eprintln!(
+                println!(
                     "!<>! | basket_service | RU | locally logged error | {}",
                     error
                 );
@@ -190,6 +190,8 @@ impl basket_service_server::BasketService for BasketContext {
                 }
             }
         };
+
+        // println!("debug | RU | returning response | {:?}", response);
 
         Ok(Response::new(response))
     }
@@ -204,39 +206,48 @@ impl basket_service_server::BasketService for BasketContext {
 
         let sq_request::Request {
             product_id,
-            max_removed_queue_position,
-            shift,
+            removed_user_queue_position,
         } = request.into_inner();
 
         let mut basket = self.basket.lock().await;
-        let shift_result =
-            basket.shift_queue_positions_of_product(product_id, max_removed_queue_position, shift);
+        let shift = 1;
+
+        let force_removed_primary_awaiter = if removed_user_queue_position.is_none() {
+            // println!("debug | SQ | removed holder, so removing primary awaiter and shifting");
+            basket
+                .force_remove_primary_awaiter(product_id)
+                .map(|primary_id| sq_request::ForceRemovedAwaiter {
+                    user_id: primary_id,
+                    product_id,
+                })
+        } else {
+            // println!("debug | SQ | removed awaiter, so just shifting");
+            None
+        };
+
+        let shift_result = basket.shift_queue_positions_of_product(
+            product_id,
+            removed_user_queue_position.unwrap_or(0),
+            shift,
+        );
+
         drop(basket);
 
-        let response = if let Some(queue_shifts) = shift_result {
-            let queue_shifts = queue_shifts
-                .into_iter()
-                .map(
-                    |ru_request::QueueShift {
-                         user_id,
-                         new_queue_position,
-                     }| sq_request::QueueShift {
-                        user_id,
-                        new_queue_position,
-                    },
-                )
-                .collect();
-
-            sq_request::Response {
-                response: Some(Success(sq_request::Success { queue_shifts })),
-            }
-        } else {
-            sq_request::Response {
+        let response = match shift_result {
+            Some(queue_shifts) => sq_request::Response {
+                response: Some(Success(sq_request::Success {
+                    force_removed_awaiter: force_removed_primary_awaiter,
+                    queue_shifts,
+                })),
+            },
+            None => sq_request::Response {
                 response: Some(Failure(sq_request::Failure {
                     status: sq_request::FailureStatus::ProductNotFound.into(),
                 })),
-            }
+            },
         };
+
+        // println!("debug | SQ | returning response | {:?}", response);
 
         Ok(Response::new(response))
     }
